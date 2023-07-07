@@ -1,3 +1,4 @@
+import web3
 import time
 
 import constants as cst
@@ -7,16 +8,14 @@ from web3.types import ChecksumAddress
 from eth_account.signers.local import LocalAccount
 from web3.middleware import construct_sign_and_send_raw_middleware
 
-from abis.pair import PAIR_ABI
 from abis.router import ROUTER_ABI
 from modules.helper import SimpleW3
-from abis.factory import FACTORY_ABI
 
 
-class SpaceFi(SimpleW3):
+class Velocore(SimpleW3):
 
     def start_swap(self, key: str, token0: str, token1: str, amount: float = None) -> int or None:
-        """Функция запуска tokens swap для SpaceFi"""
+        """Функция запуска tokens swap для Velocore"""
 
         w3 = self.connect()
         account = self.get_account(w3=w3, key=key)
@@ -41,7 +40,7 @@ class SpaceFi(SimpleW3):
             token0: str = cst.ETH,
             token1: str = cst.USDC
     ) -> bool:
-        """Функция выполнения обмена для SpaceFi"""
+        """Функция выполнения обмена для Velocore"""
 
         signer = account.address
         token0 = self.to_address(token0)
@@ -51,12 +50,17 @@ class SpaceFi(SimpleW3):
 
         #  Если повторный свап -> переводим сумму из ETH в USDC
         if isinstance(amount, float):
-            amount = self.get_usd_value(w3=w3, amount=amount, token0=token1, token1=token0)
+            amount = self.get_usd_value(
+                token1=token0,
+                token0=token1,
+                router=router,
+                amount_in=amount,
+            )
 
         if token_in == 'ETH':
             swap_tx = router.functions.swapExactETHForTokens(
                 0,
-                [token0, token1],
+                [{'from': token0, 'to': token1, 'stable': False}],
                 signer,
                 int(time.time()) + 1800,
             ).build_transaction({
@@ -87,7 +91,7 @@ class SpaceFi(SimpleW3):
             swap_tx = router.functions.swapExactTokensForETH(
                 amount,
                 0,
-                [token0, token1],
+                [{'from': token0, 'to': token1, 'stable': False}],
                 signer,
                 int(time.time()) + 1800,
             ).build_transaction({
@@ -121,24 +125,18 @@ class SpaceFi(SimpleW3):
 
         return True
 
+    @staticmethod
     def get_usd_value(
-            self,
-            w3: Web3,
-            amount: float,
+            amount_in: float,
             token0: ChecksumAddress,
             token1: ChecksumAddress,
+            router: web3.contract.Contract
     ) -> int:
         """Функция получения курса для пары"""
 
-        factory = self.get_contract(w3=w3, address=cst.FACTORY, abi=FACTORY_ABI)
-        pair = factory.functions.getPair(token1, token0).call()
+        amount_in = int(amount_in * 10 ** 18)
 
-        pair_contract = self.get_contract(w3=w3, address=pair, abi=PAIR_ABI)
+        amount_data = router.functions.getAmountOut(amount_in, token0, token1).call()
+        amount = int(amount_data[0] * .98)
 
-        reserves = pair_contract.functions.getReserves().call()
-        price = (reserves[0] / reserves[1]) * 10 ** 12
-        price -= price * 0.003
-        final_amount = int(price * amount * 10 ** 6)  # HARDCODE USDC/USDT DECIMALS
-
-        return final_amount
-
+        return amount
