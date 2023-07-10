@@ -149,6 +149,7 @@ class SimpleW3:
 
     @staticmethod
     def approve_swap(
+            sign_addr: ChecksumAddress,
             spender: ChecksumAddress,
             token: ChecksumAddress,
             signer: LocalAccount,
@@ -158,16 +159,16 @@ class SimpleW3:
         """Функция утверждения использования средств"""
 
         token_contract = w3.eth.contract(address=token, abi=ERC20_ABI)
-        allowance = token_contract.functions.allowance(signer.address, spender).call()
+        allowance = token_contract.functions.allowance(sign_addr, spender).call()
 
         if allowance < amount:
             max_amount = Web3.to_wei(2 ** 64 - 1, 'ether')
 
             transaction = token_contract.functions.approve(spender, max_amount).build_transaction({
-                'from': signer.address,
+                'from': sign_addr,
                 'gas': 3_000_000,
                 'gasPrice': w3.eth.gas_price,
-                'nonce': w3.eth.get_transaction_count(signer.address)
+                'nonce': w3.eth.get_transaction_count(sign_addr)
             })
 
             approve_tx = signer.sign_transaction(transaction)
