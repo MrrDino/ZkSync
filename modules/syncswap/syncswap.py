@@ -45,11 +45,11 @@ class SyncSwap(SimpleW3):
     ) -> bool or None:
         """Функция выполнения обмена для SyncSwap"""
 
-        signer = account.address
-        pool, token0, token1, pool_address = self.preparing(
+        pool, token0, token1, pool_address, signer = self.preparing(
             w3=w3,
             token0=token0,
-            token1=token1
+            token1=token1,
+            account=account
         )
 
         if pool_address == cst.ZERO_ADDRESS:
@@ -138,26 +138,25 @@ class SyncSwap(SimpleW3):
         return True
 
     def add_liquidity(self, token0: str, token1: str, key: str):
-        """Функция добавления ликвидности"""
+        """Функция добавления ликвидности для SyncSwap"""
 
         w3 = self.connect()
         token_in = cst.TOKENS[token0.lower()]  # если ETH -> поведение меняется
+        account = self.get_account(w3=w3, key=key)
+        router = self.get_contract(w3=w3, address=cst.ROUTER, abi=ROUTER_ABI)
+        w3.middleware_onion.add(construct_sign_and_send_raw_middleware(account))
 
-        pool, token0, token1, pool_address = self.preparing(
+        pool, token0, token1, pool_address, signer = self.preparing(
             w3=w3,
             token0=token0,
-            token1=token1
+            token1=token1,
+            account=account
         )
-        router = self.get_contract(w3=w3, address=cst.ROUTER, abi=ROUTER_ABI)
-        account = self.get_account(w3=w3, key=key)
-        signer = account.address
 
-        amount = self.get_amount(w3=w3, wallet=account.address)
+        amount = self.get_amount(w3=w3, wallet=signer)
 
-        if amount == 0:
+        if amount == 0:  # сделать ожидание ввода нужной суммы
             return
-
-        w3.middleware_onion.add(construct_sign_and_send_raw_middleware(account))
 
         if pool_address == cst.ZERO_ADDRESS:
             return
@@ -212,13 +211,47 @@ class SyncSwap(SimpleW3):
         time.sleep(30)
 
         try:
-            swap_tx = w3.eth.send_raw_transaction(transaction=signed_tx.rawTransaction)
-            tx_rec = w3.eth.wait_for_transaction_receipt(swap_tx)
+            liq_tx = w3.eth.send_raw_transaction(transaction=signed_tx.rawTransaction)
+            tx_rec = w3.eth.wait_for_transaction_receipt(liq_tx)
             status = tx_rec['status']  # будет использоваться для переотправки
-            print(f'Tx: {swap_tx.hex()}. Status: {status}')
+            print(f'Tx: {liq_tx.hex()}. Status: {status}')
 
         except BaseException as err:
             print(err)
+
+    def preparing(self, w3: Web3, token0: str, token1: str, account: LocalAccount) -> [
+        web3.contract.Contract,
+        LocalAccount,
+        ChecksumAddress,
+        ChecksumAddress,
+        ChecksumAddress,
+        ChecksumAddress
+    ]:
+        """Функция предварительного получения всех необходимых данных"""
+
+        token0 = self.to_address(token0)
+        token1 = self.to_address(token1)
+
+        pool = self.get_contract(w3=w3, address=cst.POOL_FACTORY, abi=FACTORY_ABI)
+        pool_address = pool.functions.getPool(token0, token1).call()
+
+        return [pool, token0, token1, pool_address, account.address]
+
+    def get_rate(self, w3: Web3, pool: ChecksumAddress, token_ch: ChecksumAddress) -> float:
+        """Функция получения курса в пуле"""
+
+        contract = self.get_contract(w3=w3, address=pool, abi=POOL_ABI)
+        reserves = contract.functions.getReserves().call()
+        token0 = contract.functions.token0().call()
+
+        if cst.TOKENS[token0.lower()] == 'ETH':
+            usd = int(reserves[1] / 10 ** 6) / int(reserves[0] / 10 ** 18)
+        else:
+            usd = int(reserves[0] / 10 ** 6) / int(reserves[1] / 10 ** 18)
+
+        usd -= usd * cst.MULTS[token_ch.lower()]
+
+        return usd
 
     @staticmethod
     def create_liq_tx(
@@ -257,22 +290,6 @@ class SyncSwap(SimpleW3):
 
         return txn
 
-    def get_rate(self, w3: Web3, pool: ChecksumAddress, token_ch: ChecksumAddress) -> float:
-        """Функция получения курса в пуле"""
-
-        contract = self.get_contract(w3=w3, address=pool, abi=POOL_ABI)
-        reserves = contract.functions.getReserves().call()
-        token0 = contract.functions.token0().call()
-
-        if cst.TOKENS[token0.lower()] == 'ETH':
-            usd = int(reserves[1] / 10 ** 6) / int(reserves[0] / 10 ** 18)
-        else:
-            usd = int(reserves[0] / 10 ** 6) / int(reserves[1] / 10 ** 18)
-
-        usd -= usd * cst.MULTS[token_ch.lower()]
-
-        return usd
-
     @staticmethod
     def create_swap_tx(
             router: web3.contract.Contract,
@@ -303,19 +320,3 @@ class SyncSwap(SimpleW3):
         """Функция суммы для обмена USDT/USDC"""
 
         return int(amount * rate * (10 ** dec))
-
-    def preparing(self, w3: Web3, token0: str, token1: str) -> [
-        web3.contract.Contract,
-        ChecksumAddress,
-        ChecksumAddress,
-        ChecksumAddress
-    ]:
-        """Функция предварительного получения всех необходимых данных"""
-
-        token0 = self.to_address(token0)
-        token1 = self.to_address(token1)
-
-        pool = self.get_contract(w3=w3, address=cst.POOL_FACTORY, abi=FACTORY_ABI)
-        pool_address = pool.functions.getPool(token0, token1).call()
-
-        return [pool, token0, token1, pool_address]

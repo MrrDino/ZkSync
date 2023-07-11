@@ -42,12 +42,13 @@ class MuteIO(SimpleW3):
     ) -> bool:
         """Функция выполнения обмена для Mute.io"""
 
-        # USDT нет
-        signer = account.address
-        token0 = self.to_address(token0)
-        token1 = self.to_address(token1)
+        token0, token1, signer, router = self.prepare(
+            w3=w3,
+            token0=token0,
+            token1=token1,
+            account=account
+        )
         token_in = cst.TOKENS[token0.lower()]  # если ETH -> поведение меняется
-        router = self.get_contract(w3=w3, address=cst.ROUTER, abi=ROUTER_ABI)
 
         #  Если повторный свап -> переводим сумму из ETH в USDC
         if isinstance(amount, float):
@@ -72,16 +73,21 @@ class MuteIO(SimpleW3):
             try:
                 approved_tx = self.approve_swap(
                     w3=w3,
+                    token=token0,
                     amount=amount,
                     signer=account,
+                    sign_addr=signer,
                     spender=cst.ROUTER,
-                    token=token0,
                 )
-                tx_rec = w3.eth.wait_for_transaction_receipt(approved_tx)
-                status = tx_rec['status']
-                print(f'Tx: {approved_tx.hex()}. Status: {status}')
 
-                time.sleep(50)
+                if approved_tx:
+                    tx_rec = w3.eth.wait_for_transaction_receipt(approved_tx)
+                    status = tx_rec['status']
+                    print(f'Approve tx: {approved_tx.hex()}. Status: {status}')
+                    time.sleep(50)
+                else:
+                    print("Doesn't need approve")
+                    time.sleep(20)
             except Exception as err:
                 print(err)
 
@@ -117,8 +123,86 @@ class MuteIO(SimpleW3):
             tx_rec = w3.eth.wait_for_transaction_receipt(tx)
             status = tx_rec['status']  # будет использоваться для переотправки
             print(f'Tx: {tx.hex()}. Status: {status}')
+        except Exception as err:
+            print(err)
 
-        except BaseException as err:
+        return True
+
+    def add_liquidity(self, token0: str, key: str):
+        """Функция добавления ликвидности для Mute.io"""
+
+        token1 = cst.ETH  # Почти все пулы (кроме стейблов с ETH)
+        w3 = self.connect()
+        account = self.get_account(w3=w3, key=key)
+        w3.middleware_onion.add(construct_sign_and_send_raw_middleware(account))
+
+        token0, token1, signer, router = self.prepare(
+            w3=w3,
+            token0=token0,
+            token1=token1,
+            account=account
+        )
+        amount = self.get_amount(w3=w3, wallet=signer)
+
+        if amount == 0:  # сделать ожидание ввода нужной суммы
+            return
+
+        try:
+            approved_tx = self.approve_swap(
+                w3=w3,
+                token=token0,
+                amount=amount,
+                signer=account,
+                sign_addr=signer,
+                spender=cst.ROUTER,
+            )
+
+            if approved_tx:
+                tx_rec = w3.eth.wait_for_transaction_receipt(approved_tx)
+                status = tx_rec['status']
+                print(f'Approve tx: {approved_tx.hex()}. Status: {status}')
+                time.sleep(50)
+            else:
+                print("Doesn't need approve")
+                time.sleep(20)
+        except Exception as err:
+            print(err)
+
+        liq_tx = router.functions.addLiquidityETH(
+            token0,
+            amount,
+            cst.MIN_AMOUNT,
+            cst.MIN_AMOUNT,
+            signer,
+            int(time.time()) + 1800,
+            50,  # <- fixed 0.5% = 50 / 10000
+            False
+        ).build_transaction({
+                'gas': 0,
+                'value': amount,
+                'from': signer,
+                'maxFeePerGas': 0,
+                'maxPriorityFeePerGas': 0,
+                'nonce': w3.eth.get_transaction_count(signer),
+            })
+
+        liq_tx.update(
+            {
+                'gas': w3.eth.estimate_gas(liq_tx),
+                'maxFeePerGas': w3.eth.gas_price,
+                'maxPriorityFeePerGas': w3.eth.gas_price
+            }
+        )
+
+        signed_tx = account.sign_transaction(transaction_dict=liq_tx)
+        time.sleep(30)
+
+        try:
+            tx = w3.eth.send_raw_transaction(transaction=signed_tx.rawTransaction)
+            tx_rec = w3.eth.wait_for_transaction_receipt(tx)
+            status = tx_rec['status']  # будет использоваться для переотправки
+            print(f'Tx: {tx.hex()}. Status: {status}')
+        except Exception as err:
             print(err)
 
         return True
@@ -139,3 +223,22 @@ class MuteIO(SimpleW3):
 
         return quote
 
+    def prepare(
+            self,
+            w3: Web3,
+            token0: str,
+            token1: str,
+            account: LocalAccount
+    ) -> [
+        ChecksumAddress,
+        ChecksumAddress,
+        ChecksumAddress,
+        web3.contract.Contract
+    ]:
+        """Функция преобразования первичных данных"""
+
+        token0 = self.to_address(token0)
+        token1 = self.to_address(token1)
+        router = self.get_contract(w3=w3, address=cst.ROUTER, abi=ROUTER_ABI)
+
+        return [token0, token1, account.address, router]

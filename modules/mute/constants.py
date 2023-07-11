@@ -10,3 +10,6 @@ TOKENS = {
     '0x3355df6d4c9c3035724fd0e3914de96a5a83aaf4': 'USDC',
     '0x5aea5775959fbc2557cc8789bc1bf90a239d9a91': 'ETH',
 }
+
+
+MIN_AMOUNT = 0

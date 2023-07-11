@@ -15,3 +15,5 @@ TOKENS = {
 }
 
 ERROR_RATE = 0.001  # Погрешность
+
+MIN_AMOUNT = 0
