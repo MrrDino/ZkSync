@@ -29,5 +29,20 @@ PAIR_ABI = [
         "payable": False,
         "stateMutability": "view",
         "type": "function"
+    },
+    {
+        "constant": True,
+        "inputs": [],
+        "name":"token0",
+        "outputs":[
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "payable": False,
+        "stateMutability": "view",
+        "type": "function"
     }
 ]

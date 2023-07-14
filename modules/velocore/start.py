@@ -4,8 +4,12 @@ from velocore import Velocore
 from modules.helper import pre_check
 from modules.global_constants import TIMEOUT, SWAP_BACK
 
+TKNS = [
+    '0x8e86e46278518efc1c5ced245cba2c7e3ef11557',  # USD+,
+]
 
-def start(token0: str, token1: str):
+
+def start():
 
     check = False
     vc = Velocore()
@@ -18,30 +22,15 @@ def start(token0: str, token1: str):
     proxies = [1]
     # ^- если нужно быстро протестить, не дожидаясь газа, и, не добавляя ключи
 
-    for key, proxy in zip(keys, proxies):
+    for tk in TKNS:
         # нужно добавить прокси
-
-        # amount = vc.start_swap(
-        #     token0=token0,
-        #     token1=token1,
-        #     key=key
-        # )
-        #
-        # if SWAP_BACK:
-        #     amount = amount / 10 ** 18
-        #
-        #     vc.start_swap(
-        #         amount=amount,
-        #         token0=token1,
-        #         token1=token0,
-        #         key=key
-        #     )
+        key = keys[0]
+        token0 = '0x5aea5775959fbc2557cc8789bc1bf90a239d9a91'
+        token1 = tk
+        print(tk)
 
         vc.add_liquidity(token0=token1, key=key)
 
 
 if __name__ == '__main__':
-    start(
-        token0='0x5aea5775959fbc2557cc8789bc1bf90a239d9a91',
-        token1='0x3355df6d4c9c3035724fd0e3914de96a5a83aaf4'
-    )
+    start()

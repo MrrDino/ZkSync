@@ -1,24 +1,42 @@
 import os
+import sys
 import time
 import web3
 import json
 import random
 import functools
 
+import modules.global_constants as cst
+
 from web3 import Web3
+from loguru import logger
 from hexbytes.main import HexBytes
 from web3.types import ChecksumAddress
-from modules.syncswap.abis.erc20 import ERC20_ABI
 from eth_account.signers.local import LocalAccount
 
-import modules.global_constants as cst
+from modules.general_abis.erc20 import ERC20_ABI
+
+
+try:
+    logger.remove(0)
+    logger.add(sys.stdout, format="{time:D MMMM HH:mm:ss} | {message}")
+except Exception:
+    pass
+
+
+def get_gas() -> float:
+    """Функция получения газа в сети ETH"""
+
+    w3 = Web3(Web3.HTTPProvider(cst.ETH_NODE))
+    gas_price = w3.eth.gas_price / 10 ** 9
+
+    return round(gas_price, 2)
 
 
 def check_gas() -> bool:
     """Функция проверки газа в сети ETH"""
 
-    w3 = Web3(Web3.HTTPProvider(cst.ETH_NODE))
-    gas_price = w3.eth.gas_price / 10 ** 9
+    gas_price = get_gas()
 
     if gas_price > cst.MAX_GAS:
         return False
@@ -75,29 +93,22 @@ def check_connection(w3: Web3) -> bool:
     return w3.is_connected()
 
 
-def retry(func):
-
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-
-        while True:
-            try:
-                return func(*args, **kwargs)
-            except Exception:
-                # conn = check_connection(w3=kwargs['w3'])
-                #
-                # if not conn:
-                #     return False  # нет подключения
-
-                time.sleep(45)
-
-    return wrapper
-
-
 class SimpleW3:
 
     def __init__(self):
         self.node_url = 'https://rpc.ankr.com/zksync_era'
+
+    # def connect(self, proxy: str) -> Web3:
+    #     """Функция подключения к ноде"""
+    #
+    #     proxies = dict(http=f"http://{proxy}", https=f"http://{proxy}")
+    #     w3 = Web3(Web3.HTTPProvider(
+    #         endpoint_uri=self.node_url,
+    #         request_kwargs={'proxies': proxies}
+    #     ))
+    #
+    #     if w3.is_connected():
+    #         return w3
 
     def connect(self) -> Web3:
         """Функция подключения к ноде"""
@@ -123,7 +134,7 @@ class SimpleW3:
         try:
             return web3.Web3.to_checksum_address(value=address)
         except Exception:
-            print(f"Invalid address convert {address}")
+            logger.error(f"Invalid address convert {address}")
 
     @staticmethod
     def get_account(w3: Web3, key: str) -> LocalAccount:
@@ -177,3 +188,19 @@ class SimpleW3:
             tx = w3.eth.send_raw_transaction(approve_tx.rawTransaction)
 
             return tx
+
+
+def retry(func):
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+
+        while True:
+            try:
+                return func(*args, **kwargs)
+            except Exception as err:
+                logger.error(f"\33[{31}mRetry: {err}\033[0m")
+
+                time.sleep(45)
+
+    return wrapper

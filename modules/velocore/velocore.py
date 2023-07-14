@@ -4,33 +4,52 @@ import time
 import constants as cst
 
 from web3 import Web3
+from loguru import logger
 from web3.types import ChecksumAddress
 from eth_account.signers.local import LocalAccount
 from web3.middleware import construct_sign_and_send_raw_middleware
 
 from abis.router import ROUTER_ABI
-from modules.helper import SimpleW3
+from modules.helper import SimpleW3, retry, get_gas
 
 
 class Velocore(SimpleW3):
 
-    def start_swap(self, key: str, token0: str, token1: str, amount: float = None) -> int or None:
+    @retry
+    def start_swap(
+            self,
+            key: str,
+            token0: str,
+            token1: str,
+            amount: float = None,
+            exchange: str = None,
+            pub_key: bool = False
+    ) -> int or None:
         """Функция запуска tokens swap для Velocore"""
 
         w3 = self.connect()
         account = self.get_account(w3=w3, key=key)
         w3.middleware_onion.add(construct_sign_and_send_raw_middleware(account))
 
+        if pub_key:
+            logger.info(f"Work with {account.address}. Exchange: \33[{36}m{exchange}\033[0m")
+
         if not amount:
-            amount = self.get_amount(w3=w3, wallet=account.address)
+            need_msg = True
 
-            if amount == 0:
-                return False
+            while not amount:
+                amount = self.get_amount(w3=w3, wallet=account.address)
 
-            success = self.make_swap(w3=w3, amount=amount, account=account, token0=token0, token1=token1)
+                if not amount:
+                    if need_msg:
+                        logger.error(f"Insufficient balance! Address - {account.address}, key - {key}.")
+                        need_msg = False
+                    time.sleep(10)  # add TOP_UP_WAIT
+
+            self.make_swap(w3=w3, amount=amount, account=account, token0=token0, token1=token1)
             return amount
         else:
-            success = self.make_swap(w3=w3, amount=amount, account=account, token0=token0, token1=token1)
+            self.make_swap(w3=w3, amount=amount, account=account, token0=token0, token1=token1)
 
     def make_swap(
             self,
@@ -39,7 +58,7 @@ class Velocore(SimpleW3):
             account: LocalAccount,
             token0: str = cst.ETH,
             token1: str = cst.USDC
-    ) -> bool:
+    ):
         """Функция выполнения обмена для Velocore"""
 
         token0, token1, signer, router = self.prepare(
@@ -49,6 +68,7 @@ class Velocore(SimpleW3):
             account=account
         )
         token_in = cst.TOKENS[token0.lower()]  # если ETH -> поведение меняется
+        token_out = cst.TOKENS[token1.lower()]
 
         #  Если повторный свап -> переводим сумму из ETH в USDC
         if isinstance(amount, float):
@@ -57,6 +77,7 @@ class Velocore(SimpleW3):
                 token0=token1,
                 router=router,
                 amount_in=amount,
+                token_in=token_in
             )
 
         if token_in == 'ETH':
@@ -85,15 +106,31 @@ class Velocore(SimpleW3):
                 )
 
                 if approved_tx:
+                    gas = get_gas()
+                    gas_price = w3.eth.gas_price
+
                     tx_rec = w3.eth.wait_for_transaction_receipt(approved_tx)
-                    status = tx_rec['status']
-                    print(f'Approve tx: {approved_tx.hex()}. Status: {status}')
+
+                    fee = self.get_fee(
+                        gas_used=tx_rec['gasUsed'],
+                        gas_price=gas_price,
+                        token_in=token_in,
+                        router=router
+                    )
+                    tx_fee = f"tx fee ${fee}"
+
+                    logger.info(
+                        f'||APPROVE| https://www.okx.com/explorer/zksync/tx/{approved_tx.hex()}. '
+                        f'Gas: {gas} gwei, \33[{36}m{tx_fee}\033[0m'
+                    )
+                    logger.info('Wait 50 sec.')
+
                     time.sleep(50)
                 else:
-                    print("Doesn't need approve")
+                    logger.info("Doesn't need approve. Wait 20 sec.")
                     time.sleep(20)
             except Exception as err:
-                print(err)
+                logger.error(f"\33[{31}m{err}\033[0m")
 
             swap_tx = router.functions.swapExactTokensForETH(
                 amount,
@@ -110,32 +147,48 @@ class Velocore(SimpleW3):
                 'nonce': w3.eth.get_transaction_count(signer),
             })
 
+        gas_price = w3.eth.gas_price
         swap_tx.update(
             {
                 'gas': w3.eth.estimate_gas(swap_tx),
-                'maxFeePerGas': w3.eth.gas_price,
-                'maxPriorityFeePerGas': w3.eth.gas_price
+                'maxFeePerGas': gas_price,
+                'maxPriorityFeePerGas': gas_price
             }
         )
 
         signed_tx = account.sign_transaction(transaction_dict=swap_tx)
+        logger.info("Swap transaction signed. Wait 30 sec.")
         time.sleep(30)
+        status = 0
 
         try:
-            tx = w3.eth.send_raw_transaction(transaction=signed_tx.rawTransaction)
-            tx_rec = w3.eth.wait_for_transaction_receipt(tx)
-            status = tx_rec['status']  # будет использоваться для переотправки
-            print(f'Tx: {tx.hex()}. Status: {status}')
+            swap_tx = w3.eth.send_raw_transaction(transaction=signed_tx.rawTransaction)
+            tx_rec = w3.eth.wait_for_transaction_receipt(swap_tx)
 
-        except BaseException as err:
-            print(err)
+            gas = get_gas()
+            status = tx_rec['status']
+            fee = self.get_fee(
+                gas_used=tx_rec['gasUsed'],
+                gas_price=gas_price,
+                token_in=token_in,
+                router=router
+            )
+            tx_fee = f"tx fee ${fee}"
 
-        return True
+            logger.info(
+                f'||SWAP to {token_out}| https://www.okx.com/explorer/zksync/tx/{swap_tx.hex()}. '
+                f'Gas: {gas} gwei, \33[{36}m{tx_fee}\033[0m'
+            )
+        except Exception as err:
+            logger.error(f"\33[{31}m{err}\033[0m")
+
+        assert status == 1  # если статус != 1 транзакция не прошла
 
     def add_liquidity(self, token0: str, key: str):
         """Функция добавления ликвидности для Sapce Finance"""
 
-        token1 = cst.ETH  # Почти все пулы (кроме стейблов с ETH)
+        amount = None
+        token1 = cst.ETH  # Почти все пулы (кроме стейбл пулов с ETH)
         w3 = self.connect()
         account = self.get_account(w3=w3, key=key)
         w3.middleware_onion.add(construct_sign_and_send_raw_middleware(account))
@@ -146,10 +199,20 @@ class Velocore(SimpleW3):
             token1=token1,
             account=account
         )
-        amount = self.get_amount(w3=w3, wallet=signer)
+        token_in = cst.TOKENS[token0.lower()]
+        token_out = cst.TOKENS[token1.lower()]
 
-        if amount == 0:  # сделать ожидание ввода нужной суммы
-            return
+        if not amount:
+            need_msg = True
+
+            while not amount:
+                amount = self.get_amount(w3=w3, wallet=account.address)
+
+                if not amount:
+                    if need_msg:
+                        logger.error(f"Insufficient balance! Address - {account.address}, key - {key}.")
+                        need_msg = False
+                    time.sleep(10)  # add TOP_UP_WAIT
 
         try:
             approved_tx = self.approve_swap(
@@ -162,19 +225,35 @@ class Velocore(SimpleW3):
             )
 
             if approved_tx:
+                gas = get_gas()
+                gas_price = w3.eth.gas_price
+
                 tx_rec = w3.eth.wait_for_transaction_receipt(approved_tx)
-                status = tx_rec['status']
-                print(f'Approve tx: {approved_tx.hex()}. Status: {status}')
-                time.sleep(70)
+
+                fee = self.get_fee(
+                    gas_used=tx_rec['gasUsed'],
+                    gas_price=gas_price,
+                    token_in=token_in,
+                    router=router
+                )
+                tx_fee = f"tx fee ${fee}"
+
+                logger.info(
+                    f'||APPROVE| https://www.okx.com/explorer/zksync/tx/{approved_tx.hex()}. '
+                    f'Gas: {gas} gwei, \33[{36}m{tx_fee}\033[0m'
+                )
+                logger.info('Wait 50 sec.')
+
+                time.sleep(50)
             else:
-                print("Doesn't need approve")
+                logger.info("Doesn't need approve. Wait 20 sec.")
                 time.sleep(20)
         except Exception as err:
-            print(err)
+            logger.error(f"\33[{31}m{err}\033[0m")
 
         liq_tx = router.functions.addLiquidityETH(
             token0,
-            True,  # Easier withdraw from stable pool
+            True,  # Easier withdraw from pool with stable
             amount,
             cst.MIN_AMOUNT,
             cst.MIN_AMOUNT,
@@ -187,32 +266,48 @@ class Velocore(SimpleW3):
                 'maxFeePerGas': 0,
                 'maxPriorityFeePerGas': 0,
                 'nonce': w3.eth.get_transaction_count(signer),
-            })
+        })
 
+        gas_price = w3.eth.gas_price
         liq_tx.update(
             {
                 'gas': w3.eth.estimate_gas(liq_tx),
-                'maxFeePerGas': w3.eth.gas_price,
-                'maxPriorityFeePerGas': w3.eth.gas_price
+                'maxFeePerGas': gas_price,
+                'maxPriorityFeePerGas': gas_price
             }
         )
 
         signed_tx = account.sign_transaction(transaction_dict=liq_tx)
+        logger.info("Liquidity transaction signed. Wait 30 sec.")
         time.sleep(30)
+        status = 0
 
         try:
-            tx = w3.eth.send_raw_transaction(transaction=signed_tx.rawTransaction)
-            tx_rec = w3.eth.wait_for_transaction_receipt(tx)
-            status = tx_rec['status']  # будет использоваться для переотправки
-            print(f'Tx: {tx.hex()}. Status: {status}')
-        except Exception as err:
-            print(err)
+            liq_tx = w3.eth.send_raw_transaction(transaction=signed_tx.rawTransaction)
+            tx_rec = w3.eth.wait_for_transaction_receipt(liq_tx)
+            gas = get_gas()
+            status = tx_rec['status']
+            fee = self.get_fee(
+                gas_used=tx_rec['gasUsed'],
+                gas_price=gas_price,
+                token_in=token_in,
+                router=router
+            )
+            tx_fee = f"tx fee ${fee}"
 
-        return True
+            logger.info(
+                f'||ADD LIQ {token_in}/{token_out}| https://www.okx.com/explorer/zksync/tx/{liq_tx.hex()}. '
+                f'Gas: {gas} gwei, \33[{36}m{tx_fee}\033[0m'
+            )
+        except Exception as err:
+            logger.error(f"\33[{31}m{err}\033[0m")
+
+        assert status == 1  # если статус != 1 транзакция не прошла
 
     @staticmethod
     def get_usd_value(
             amount_in: float,
+            token_in: str,
             token0: ChecksumAddress,
             token1: ChecksumAddress,
             router: web3.contract.Contract
@@ -222,7 +317,11 @@ class Velocore(SimpleW3):
         amount_in = int(amount_in * 10 ** 18)
 
         amount_data = router.functions.getAmountOut(amount_in, token0, token1).call()
-        amount = int(amount_data[0] * .98)
+
+        if token_in == 'USDC':
+            amount = int(amount_data[0] * .98)
+        else:
+            amount = int(amount_data[0] * .99)
 
         return amount
 
@@ -245,3 +344,19 @@ class Velocore(SimpleW3):
         router = self.get_contract(w3=w3, address=cst.ROUTER, abi=ROUTER_ABI)
 
         return [token0, token1, account.address, router]
+
+    def get_fee(
+            self,
+            token_in: str,
+            gas_price: int,
+            gas_used: float,
+            router: web3.contract.Contract
+    ) -> float:
+        """Функция получения комиссии транзакции в долларах"""
+
+        amount = (gas_used * gas_price) / 10 ** 18
+        token0 = self.to_address('0x5aea5775959fbc2557cc8789bc1bf90a239d9a91')
+        token1 = self.to_address('0x3355df6D4c9C3035724Fd0e3914dE96A5a83aaf4')
+        fee = self.get_usd_value(amount_in=amount, router=router, token0=token0, token1=token1, token_in=token_in)
+
+        return round((fee / 10 ** 6), 2)

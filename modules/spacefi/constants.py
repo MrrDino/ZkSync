@@ -9,8 +9,22 @@ TOKENS = {
     '0x493257fd37edb34451f62edf8d2a0c418852ba4c': 'USDT',
     '0x3355df6d4c9c3035724fd0e3914de96a5a83aaf4': 'USDC',
     '0x5aea5775959fbc2557cc8789bc1bf90a239d9a91': 'ETH',
+    '0x2039bb4116b4efc145ec4f0e2ea75012d6c0f181': 'BUSD',
+    '0xfc7e56298657b002b3e656400e746b7212912757': 'ZkUSD',
+    '0x503234f203fc7eb888eec8513210612a43cf6115': 'LUSD',
+    '0x8e86e46278518efc1c5ced245cba2c7e3ef11557': 'USD+',
+    '0xb4c1544cb4163f4c2eca1ae9ce999f63892d912a': 'FRAX'
 }
 
 FEE = 0.004  # 0.003 -> от каждой сделки идет поставщикам ликвидности + 0.001 - погрешность
 
 MIN_AMOUNT = 0
+
+
+TKNS = [
+    '0x2039bb4116B4EFc145Ec4f0e2eA75012D6C0f181',  # BUSD,
+    '0xfC7E56298657B002b3e656400E746b7212912757',  # ZkUSD,
+    '0x503234F203fC7Eb888EEC8513210612a43Cf6115',  # LUSD,
+    '0x8e86e46278518efc1c5ced245cba2c7e3ef11557',  # USD+,
+    '0xb4c1544cb4163f4c2eca1ae9ce999f63892d912a',  # FRAX,
+]

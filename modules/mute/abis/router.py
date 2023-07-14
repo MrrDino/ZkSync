@@ -363,11 +363,11 @@ ROUTER_ABI = [
         ],
         "name": "swapExactTokensForETH",
         "outputs": [
-            {
-                "internalType": "uint256[]",
-                "name": "amounts",
-                "type": "uint256[]"
-            }
+             {
+                 "internalType": "uint256[]",
+                 "name": "amounts",
+                 "type": "uint256[]"
+             }
         ],
         "stateMutability": "nonpayable",
         "type": "function"
