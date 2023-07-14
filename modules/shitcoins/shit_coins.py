@@ -1,9 +1,9 @@
-import constants as cst
+from . import constants as cst
+from syncswap.syncswap import SyncSwap
 
-from modules.spacefi.spacefi import SpaceFi
 
+def buy_shitcoin(shit_coin: str, key: str, proxies: list):
+    """Функция покупки шиткоинов"""
 
-def buy_shitcoin(shit_coin: str, key: str):
-
-    sf = SpaceFi()
-    sf.start_swap(key=key, token0=cst.ETH, token1=shit_coin)
+    sf = SyncSwap(proxies=proxies)
+    sf.start_swap(key=key, token0=cst.ETH, token1=shit_coin, mode=2)

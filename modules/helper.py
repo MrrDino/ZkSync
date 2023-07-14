@@ -6,7 +6,7 @@ import json
 import random
 import functools
 
-import modules.global_constants as cst
+import global_constants as cst
 
 from web3 import Web3
 from loguru import logger
@@ -14,7 +14,7 @@ from hexbytes.main import HexBytes
 from web3.types import ChecksumAddress
 from eth_account.signers.local import LocalAccount
 
-from modules.general_abis.erc20 import ERC20_ABI
+from general_abis.erc20 import ERC20_ABI
 
 
 try:
@@ -95,28 +95,25 @@ def check_connection(w3: Web3) -> bool:
 
 class SimpleW3:
 
-    def __init__(self):
-        self.node_url = 'https://rpc.ankr.com/zksync_era'
-
-    # def connect(self, proxy: str) -> Web3:
-    #     """Функция подключения к ноде"""
-    #
-    #     proxies = dict(http=f"http://{proxy}", https=f"http://{proxy}")
-    #     w3 = Web3(Web3.HTTPProvider(
-    #         endpoint_uri=self.node_url,
-    #         request_kwargs={'proxies': proxies}
-    #     ))
-    #
-    #     if w3.is_connected():
-    #         return w3
+    def __init__(self, proxies: list):
+        self.node_url = cst.ZK_NODE
+        self.proxies = proxies
 
     def connect(self) -> Web3:
         """Функция подключения к ноде"""
 
-        w3 = Web3(Web3.HTTPProvider(endpoint_uri=self.node_url))
+        conn = False
 
-        if w3.is_connected():
-            return w3
+        while not conn:
+            proxy = random.choice(self.proxies)
+            proxies = dict(http=proxy, https=proxy)
+            w3 = Web3(Web3.HTTPProvider(
+                endpoint_uri=self.node_url,
+                request_kwargs={'proxies': proxies}
+            ))
+            conn = w3.is_connected()
+
+        return w3
 
     def get_contract(self, w3: web3.Web3, address: str, abi: list) -> web3.contract.Contract:
         """Функция получения пула"""
@@ -142,16 +139,17 @@ class SimpleW3:
         account = w3.eth.account.from_key(key)
         return account
 
-    def get_amount(self, w3: Web3, wallet: str) -> int:
+    def get_amount(self, w3: Web3, wallet: str, mode: int) -> int:
         """Функция проверки баланса"""
 
         wallet = self.to_address(address=wallet)
         eth_balance = w3.eth.get_balance(wallet)
-        min_amount = cst.MIN_AMOUNT * 10 ** 18
-        max_amount = cst.MAX_AMOUNT * 10 ** 18
+        min_amount, max_amount = cst.AMOUNTS[mode]
+        min_amount = int(min_amount * 10 ** 18)
+        max_amount = int(max_amount * 10 ** 18)
 
         if eth_balance < min_amount:  # простая проверка на баланс
-            return 0
+            return
         elif eth_balance < max_amount:
             eth_balance = int(eth_balance * .9)
             return random.randrange(min_amount, eth_balance)
@@ -200,7 +198,7 @@ def retry(func):
                 return func(*args, **kwargs)
             except Exception as err:
                 logger.error(f"\33[{31}mRetry: {err}\033[0m")
-
+                # kwargs.update({'reconnect': True})  На будущее
                 time.sleep(45)
 
     return wrapper

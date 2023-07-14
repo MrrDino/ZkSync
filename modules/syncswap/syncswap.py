@@ -2,18 +2,19 @@ import web3
 import time
 import eth_abi
 
-import constants as cst
-
 from web3 import Web3
 from loguru import logger
 from web3.types import TxParams, ChecksumAddress
 from eth_account.signers.local import LocalAccount
 from web3.middleware import construct_sign_and_send_raw_middleware
 
-from abis.pool import POOL_ABI
-from abis.router import ROUTER_ABI
-from abis.factory import FACTORY_ABI
-from modules.helper import SimpleW3, retry, get_gas
+from . import constants as cst
+from .abis.pool import POOL_ABI
+from .abis.router import ROUTER_ABI
+from .abis.factory import FACTORY_ABI
+from global_constants import TOP_UP_WAIT
+from general_abis.erc20 import ERC20_ABI
+from helper import SimpleW3, retry, get_gas
 
 
 class SyncSwap(SimpleW3):
@@ -24,6 +25,7 @@ class SyncSwap(SimpleW3):
             key: str,
             token0: str,
             token1: str,
+            mode: int = 0,
             amount: float = None,
             exchange: str = None,
             pub_key: bool = False
@@ -35,19 +37,19 @@ class SyncSwap(SimpleW3):
         w3.middleware_onion.add(construct_sign_and_send_raw_middleware(account))
 
         if pub_key:
-            logger.info(f"Work with {account.address}. Exchange: \33[{36}m{exchange}\033[0m")
+            logger.info(f"Work with \33[{35}m{account.address}\033[0m. Exchange: \33[{36}m{exchange}\033[0m")
 
         if not amount:
             need_msg = True
 
             while not amount:
-                amount = self.get_amount(w3=w3, wallet=account.address)
+                amount = self.get_amount(w3=w3, wallet=account.address, mode=mode)
 
                 if not amount:
                     if need_msg:
                         logger.error(f"Insufficient balance! Address - {account.address}, key - {key}.")
                         need_msg = False
-                    time.sleep(10)  # add TOP_UP_WAIT
+                    time.sleep(TOP_UP_WAIT)  # add TOP_UP_WAIT
 
             self.make_swap(w3=w3, amount=amount, account=account, token0=token0, token1=token1)
             return amount
@@ -77,46 +79,17 @@ class SyncSwap(SimpleW3):
 
         #  Если повторный свап -> переводим сумму из ETH в USDC
         if isinstance(amount, float):
-            rate = self.get_rate(w3=w3, pool=pool_address, token_ch=token0)
-            amount = self.get_swap_amount(amount=amount, rate=rate)
+            amount = self.get_usd_value(w3=w3, amount=amount, pool=pool_address, token_ch=token0)
 
         if token_in != 'ETH':
-            try:
-                approved_tx = self.approve_swap(
-                    w3=w3,
-                    token=token0,
-                    amount=amount,
-                    signer=account,
-                    sign_addr=signer,
-                    spender=cst.ROUTER,
-                )
-
-                if approved_tx:
-                    gas = get_gas()
-                    gas_price = w3.eth.gas_price
-
-                    tx_rec = w3.eth.wait_for_transaction_receipt(approved_tx)
-
-                    fee = self.get_fee(
-                        gas_used=tx_rec['gasUsed'],
-                        gas_price=gas_price,
-                        token_in=token_in,
-                        router=router
-                    )
-                    tx_fee = f"tx fee ${fee}"
-
-                    logger.info(
-                        f'||APPROVE| https://www.okx.com/explorer/zksync/tx/{approved_tx.hex()}. '
-                        f'Gas: {gas} gwei, \33[{36}m{tx_fee}\033[0m'
-                    )
-                    logger.info('Wait 50 sec.')
-
-                    time.sleep(50)
-                else:
-                    logger.info("Doesn't need approve. Wait 20 sec.")
-                    time.sleep(20)
-            except Exception as err:
-                logger.error(f"\33[{31}m{err}\033[0m")
+            self.approve(
+                w3=w3,
+                token=token0,
+                signer=signer,
+                amount=amount,
+                account=account,
+                spender=cst.ROUTER
+            )
 
         steps = [
             {
@@ -168,10 +141,9 @@ class SyncSwap(SimpleW3):
             gas = get_gas()
             status = tx_rec['status']
             fee = self.get_fee(
-                gas_used=tx_rec['gasUsed'],
+                w3=w3,
                 gas_price=gas_price,
-                token_in=token_in,
-                router=router
+                gas_used=tx_rec['gasUsed']
             )
             tx_fee = f"tx fee ${fee}"
 
@@ -185,12 +157,17 @@ class SyncSwap(SimpleW3):
         assert status == 1  # если статус != 1 транзакция не прошла
 
     @retry
-    def add_liquidity(self, token0: str, token1: str, key: str):
+    def add_liquidity(
+            self,
+            key: str,
+            token1: str,
+            mode: int = 1
+    ):
         """Функция добавления ликвидности для SyncSwap"""
 
         amount = None
         w3 = self.connect()
-        token_in = cst.TOKENS[token0.lower()]  # если ETH -> поведение меняется
+        token0 = self.to_address(cst.ETH)
         account = self.get_account(w3=w3, key=key)
         router = self.get_contract(w3=w3, address=cst.ROUTER, abi=ROUTER_ABI)
         w3.middleware_onion.add(construct_sign_and_send_raw_middleware(account))
@@ -201,6 +178,7 @@ class SyncSwap(SimpleW3):
             token1=token1,
             account=account
         )
+
         token_in = cst.TOKENS[token0.lower()]
         token_out = cst.TOKENS[token1.lower()]
 
@@ -208,56 +186,25 @@ class SyncSwap(SimpleW3):
             need_msg = True
 
             while not amount:
-                amount = self.get_amount(w3=w3, wallet=account.address)
+                amount = self.get_amount(w3=w3, wallet=account.address, mode=mode)
 
                 if not amount:
                     if need_msg:
                         logger.error(f"Insufficient balance! Address - {account.address}, key - {key}.")
                         need_msg = False
-                    time.sleep(10)  # add TOP_UP_WAIT
+                    time.sleep(TOP_UP_WAIT)
 
         if token_in != 'ETH':
-            amount /= 10 ** 18
-            rate = self.get_rate(w3=w3, pool=pool_address, token_ch=token0)
-            amount = self.get_swap_amount(amount=amount, rate=rate)
+            amount = self.get_usd_value(w3=w3, amount=amount, pool=pool_address, token_ch=token0)
 
-        if token_in != 'ETH':
-            try:
-                approved_tx = self.approve_swap(
-                    w3=w3,
-                    token=token0,
-                    amount=amount,
-                    signer=account,
-                    sign_addr=signer,
-                    spender=cst.ROUTER,
-                )
-
-                if approved_tx:
-                    gas = get_gas()
-                    gas_price = w3.eth.gas_price
-
-                    tx_rec = w3.eth.wait_for_transaction_receipt(approved_tx)
-
-                    fee = self.get_fee(
-                        gas_used=tx_rec['gasUsed'],
-                        gas_price=gas_price,
-                        token_in=token_in,
-                        router=router
-                    )
-                    tx_fee = f"tx fee ${fee}"
-
-                    logger.info(
-                        f'||APPROVE| https://www.okx.com/explorer/zksync/tx/{approved_tx.hex()}. '
-                        f'Gas: {gas} gwei, \33[{36}m{tx_fee}\033[0m'
-                    )
-                    logger.info('Wait 50 sec.')
-
-                    time.sleep(50)
-                else:
-                    logger.info("Doesn't need approve. Wait 20 sec.")
-                    time.sleep(20)
-            except Exception as err:
-                logger.error(f"\33[{31}m{err}\033[0m")
+            self.approve(
+                w3=w3,
+                token=token0,
+                signer=signer,
+                amount=amount,
+                account=account,
+                spender=cst.ROUTER
+            )
 
         liq_tx = self.create_liq_tx(
             pool=pool_address,
@@ -290,10 +237,9 @@ class SyncSwap(SimpleW3):
             gas = get_gas()
             status = tx_rec['status']
             fee = self.get_fee(
-                gas_used=tx_rec['gasUsed'],
+                w3=w3,
                 gas_price=gas_price,
-                token_in=token_in,
-                router=router
+                gas_used=tx_rec['gasUsed']
             )
             tx_fee = f"tx fee ${fee}"
 
@@ -323,22 +269,6 @@ class SyncSwap(SimpleW3):
         pool_address = pool.functions.getPool(token0, token1).call()
 
         return [pool, token0, token1, pool_address, account.address]
-
-    def get_rate(self, w3: Web3, pool: ChecksumAddress, token_ch: ChecksumAddress) -> float:
-        """Функция получения курса в пуле"""
-
-        contract = self.get_contract(w3=w3, address=pool, abi=POOL_ABI)
-        reserves = contract.functions.getReserves().call()
-        token0 = contract.functions.token0().call()
-
-        if cst.TOKENS[token0.lower()] == 'ETH':
-            usd = int(reserves[1] / 10 ** 6) / int(reserves[0] / 10 ** 18)
-        else:
-            usd = int(reserves[0] / 10 ** 6) / int(reserves[1] / 10 ** 18)
-
-        usd -= usd * cst.MULTS[token_ch.lower()]
-
-        return usd
 
     @staticmethod
     def create_liq_tx(
@@ -402,27 +332,89 @@ class SyncSwap(SimpleW3):
 
         return txn
 
-    @staticmethod
-    def get_swap_amount(amount: float, rate: float, dec: int = 6) -> int:
-        """Функция суммы для обмена USDT/USDC"""
+    def get_usd_value(
+            self,
+            w3: Web3,
+            amount: float,
+            pool: ChecksumAddress,
+            token_ch: ChecksumAddress,
+    ) -> int:
+        """Функция получения курса в пуле"""
 
-        return int(amount * rate * (10 ** dec))
+        token_contract = w3.eth.contract(address=token_ch, abi=ERC20_ABI)
+        decs = token_contract.functions.decimals().call()
+
+        contract = self.get_contract(w3=w3, address=pool, abi=POOL_ABI)
+        reserves = contract.functions.getReserves().call()
+        token0 = contract.functions.token0().call()
+
+        if cst.TOKENS[token0.lower()] == 'ETH':
+            usd = int(reserves[1] / reserves[0] * 10 ** (18 - decs))
+        else:
+            usd = int(reserves[0] / reserves[1] * 10 ** (18 - decs))
+
+        usd -= usd * cst.MULTS[token_ch.lower()]
+
+        return int(amount * usd * (10 ** decs))
 
     def get_fee(
             self,
-            token_in: str,
+            w3: Web3,
             gas_price: int,
             gas_used: float,
-            router: web3.contract.Contract
+            pool: ChecksumAddress = '0x80115c708E12eDd42E504c1cD52Aea96C547c05c'  # Default ETH/USDC
     ) -> float:
         """Функция получения комиссии транзакции в долларах"""
 
         amount = (gas_used * gas_price) / 10 ** 18
-        token0 = self.to_address('0x5aea5775959fbc2557cc8789bc1bf90a239d9a91')
         token1 = self.to_address('0x3355df6D4c9C3035724Fd0e3914dE96A5a83aaf4')
-        fee = self.get_usd_value(amount_in=amount, router=router, token0=token0, token1=token1, token_in=token_in)
+        fee = self.get_usd_value(w3=w3, amount=amount, pool=pool, token_ch=token1)
 
         return round((fee / 10 ** 6), 2)
 
+    def approve(
+            self,
+            w3: Web3,
+            amount: int,
+            account: LocalAccount,
+            token: ChecksumAddress,
+            signer: ChecksumAddress,
+            spender: ChecksumAddress
+    ):
+        """Функция подтверждения использования средств"""
 
-sc = SyncSwap()
+        try:
+            approved_tx = self.approve_swap(
+                w3=w3,
+                token=token,
+                amount=amount,
+                signer=account,
+                spender=spender,
+                sign_addr=signer
+            )
+
+            if approved_tx:
+                gas = get_gas()
+                gas_price = w3.eth.gas_price
+
+                tx_rec = w3.eth.wait_for_transaction_receipt(approved_tx)
+
+                fee = self.get_fee(
+                    w3=w3,
+                    gas_price=gas_price,
+                    gas_used=tx_rec['gasUsed']
+                )
+                tx_fee = f"tx fee ${fee}"
+
+                logger.info(
+                    f'||APPROVE| https://www.okx.com/explorer/zksync/tx/{approved_tx.hex()}. '
+                    f'Gas: {gas} gwei, \33[{36}m{tx_fee}\033[0m'
+                )
+                logger.info('Wait 50 sec.')
+
+                time.sleep(50)
+            else:
+                logger.info("Doesn't need approve. Wait 20 sec.")
+                time.sleep(20)
+        except Exception as err:
+            logger.error(f"\33[{31}m{err}\033[0m")

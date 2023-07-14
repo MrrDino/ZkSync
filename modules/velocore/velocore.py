@@ -1,16 +1,16 @@
 import web3
 import time
 
-import constants as cst
-
 from web3 import Web3
 from loguru import logger
 from web3.types import ChecksumAddress
 from eth_account.signers.local import LocalAccount
 from web3.middleware import construct_sign_and_send_raw_middleware
 
-from abis.router import ROUTER_ABI
-from modules.helper import SimpleW3, retry, get_gas
+from . import constants as cst
+from .abis.router import ROUTER_ABI
+from global_constants import TOP_UP_WAIT
+from helper import SimpleW3, retry, get_gas
 
 
 class Velocore(SimpleW3):
@@ -21,6 +21,7 @@ class Velocore(SimpleW3):
             key: str,
             token0: str,
             token1: str,
+            mode: int = 0,
             amount: float = None,
             exchange: str = None,
             pub_key: bool = False
@@ -32,19 +33,19 @@ class Velocore(SimpleW3):
         w3.middleware_onion.add(construct_sign_and_send_raw_middleware(account))
 
         if pub_key:
-            logger.info(f"Work with {account.address}. Exchange: \33[{36}m{exchange}\033[0m")
+            logger.info(f"Work with \33[{35}m{account.address}\033[0m. Exchange: \33[{36}m{exchange}\033[0m")
 
         if not amount:
             need_msg = True
 
             while not amount:
-                amount = self.get_amount(w3=w3, wallet=account.address)
+                amount = self.get_amount(w3=w3, wallet=account.address, mode=mode)
 
                 if not amount:
                     if need_msg:
                         logger.error(f"Insufficient balance! Address - {account.address}, key - {key}.")
                         need_msg = False
-                    time.sleep(10)  # add TOP_UP_WAIT
+                    time.sleep(TOP_UP_WAIT)
 
             self.make_swap(w3=w3, amount=amount, account=account, token0=token0, token1=token1)
             return amount
@@ -77,7 +78,6 @@ class Velocore(SimpleW3):
                 token0=token1,
                 router=router,
                 amount_in=amount,
-                token_in=token_in
             )
 
         if token_in == 'ETH':
@@ -95,42 +95,16 @@ class Velocore(SimpleW3):
                 'nonce': w3.eth.get_transaction_count(signer),
             })
         else:
-            try:
-                approved_tx = self.approve_swap(
-                    w3=w3,
-                    token=token0,
-                    amount=amount,
-                    signer=account,
-                    sign_addr=signer,
-                    spender=cst.ROUTER,
-                )
-
-                if approved_tx:
-                    gas = get_gas()
-                    gas_price = w3.eth.gas_price
-
-                    tx_rec = w3.eth.wait_for_transaction_receipt(approved_tx)
-
-                    fee = self.get_fee(
-                        gas_used=tx_rec['gasUsed'],
-                        gas_price=gas_price,
-                        token_in=token_in,
-                        router=router
-                    )
-                    tx_fee = f"tx fee ${fee}"
-
-                    logger.info(
-                        f'||APPROVE| https://www.okx.com/explorer/zksync/tx/{approved_tx.hex()}. '
-                        f'Gas: {gas} gwei, \33[{36}m{tx_fee}\033[0m'
-                    )
-                    logger.info('Wait 50 sec.')
-
-                    time.sleep(50)
-                else:
-                    logger.info("Doesn't need approve. Wait 20 sec.")
-                    time.sleep(20)
-            except Exception as err:
-                logger.error(f"\33[{31}m{err}\033[0m")
+            self.approve(
+                w3=w3,
+                token=token0,
+                signer=signer,
+                amount=amount,
+                router=router,
+                account=account,
+                token_in=token_in,
+                spender=cst.ROUTER
+            )
 
             swap_tx = router.functions.swapExactTokensForETH(
                 amount,
@@ -184,11 +158,12 @@ class Velocore(SimpleW3):
 
         assert status == 1  # если статус != 1 транзакция не прошла
 
-    def add_liquidity(self, token0: str, key: str):
+    @retry
+    def add_liquidity(self, token0: str, key: str, mode: int = 1):
         """Функция добавления ликвидности для Sapce Finance"""
 
         amount = None
-        token1 = cst.ETH  # Почти все пулы (кроме стейбл пулов с ETH)
+        token1 = self.to_address(cst.ETH)  # Почти все пулы (кроме стейбл пулов с ETH)
         w3 = self.connect()
         account = self.get_account(w3=w3, key=key)
         w3.middleware_onion.add(construct_sign_and_send_raw_middleware(account))
@@ -206,50 +181,24 @@ class Velocore(SimpleW3):
             need_msg = True
 
             while not amount:
-                amount = self.get_amount(w3=w3, wallet=account.address)
+                amount = self.get_amount(w3=w3, wallet=account.address, mode=mode)
 
                 if not amount:
                     if need_msg:
                         logger.error(f"Insufficient balance! Address - {account.address}, key - {key}.")
                         need_msg = False
-                    time.sleep(10)  # add TOP_UP_WAIT
+                    time.sleep(TOP_UP_WAIT)
 
-        try:
-            approved_tx = self.approve_swap(
-                w3=w3,
-                token=token0,
-                amount=amount,
-                signer=account,
-                sign_addr=signer,
-                spender=cst.ROUTER,
-            )
-
-            if approved_tx:
-                gas = get_gas()
-                gas_price = w3.eth.gas_price
-
-                tx_rec = w3.eth.wait_for_transaction_receipt(approved_tx)
-
-                fee = self.get_fee(
-                    gas_used=tx_rec['gasUsed'],
-                    gas_price=gas_price,
-                    token_in=token_in,
-                    router=router
-                )
-                tx_fee = f"tx fee ${fee}"
-
-                logger.info(
-                    f'||APPROVE| https://www.okx.com/explorer/zksync/tx/{approved_tx.hex()}. '
-                    f'Gas: {gas} gwei, \33[{36}m{tx_fee}\033[0m'
-                )
-                logger.info('Wait 50 sec.')
-
-                time.sleep(50)
-            else:
-                logger.info("Doesn't need approve. Wait 20 sec.")
-                time.sleep(20)
-        except Exception as err:
-            logger.error(f"\33[{31}m{err}\033[0m")
+        self.approve(
+            w3=w3,
+            token=token0,
+            signer=signer,
+            amount=amount,
+            router=router,
+            account=account,
+            token_in=token_in,
+            spender=cst.ROUTER
+        )
 
         liq_tx = router.functions.addLiquidityETH(
             token0,
@@ -304,10 +253,58 @@ class Velocore(SimpleW3):
 
         assert status == 1  # если статус != 1 транзакция не прошла
 
+    def approve(
+            self,
+            w3: Web3,
+            amount: int,
+            token_in: str,
+            account: LocalAccount,
+            token: ChecksumAddress,
+            signer: ChecksumAddress,
+            spender: ChecksumAddress,
+            router: web3.contract.Contract
+    ):
+        """Функция подтверждения использования средств"""
+        try:
+            approved_tx = self.approve_swap(
+                w3=w3,
+                token=token,
+                amount=amount,
+                signer=account,
+                sign_addr=signer,
+                spender=spender,
+            )
+
+            if approved_tx:
+                gas = get_gas()
+                gas_price = w3.eth.gas_price
+
+                tx_rec = w3.eth.wait_for_transaction_receipt(approved_tx)
+
+                fee = self.get_fee(
+                    gas_used=tx_rec['gasUsed'],
+                    gas_price=gas_price,
+                    token_in=token_in,
+                    router=router
+                )
+                tx_fee = f"tx fee ${fee}"
+
+                logger.info(
+                    f'||APPROVE| https://www.okx.com/explorer/zksync/tx/{approved_tx.hex()}. '
+                    f'Gas: {gas} gwei, \33[{36}m{tx_fee}\033[0m'
+                )
+                logger.info('Wait 50 sec.')
+
+                time.sleep(50)
+            else:
+                logger.info("Doesn't need approve. Wait 20 sec.")
+                time.sleep(20)
+        except Exception as err:
+            logger.error(f"\33[{31}m{err}\033[0m")
+
     @staticmethod
     def get_usd_value(
             amount_in: float,
-            token_in: str,
             token0: ChecksumAddress,
             token1: ChecksumAddress,
             router: web3.contract.Contract
@@ -317,11 +314,7 @@ class Velocore(SimpleW3):
         amount_in = int(amount_in * 10 ** 18)
 
         amount_data = router.functions.getAmountOut(amount_in, token0, token1).call()
-
-        if token_in == 'USDC':
-            amount = int(amount_data[0] * .98)
-        else:
-            amount = int(amount_data[0] * .99)
+        amount = int(amount_data[0] * .98)
 
         return amount
 
@@ -357,6 +350,6 @@ class Velocore(SimpleW3):
         amount = (gas_used * gas_price) / 10 ** 18
         token0 = self.to_address('0x5aea5775959fbc2557cc8789bc1bf90a239d9a91')
         token1 = self.to_address('0x3355df6D4c9C3035724Fd0e3914dE96A5a83aaf4')
-        fee = self.get_usd_value(amount_in=amount, router=router, token0=token0, token1=token1, token_in=token_in)
+        fee = self.get_usd_value(amount_in=amount, router=router, token0=token0, token1=token1)
 
         return round((fee / 10 ** 6), 2)
