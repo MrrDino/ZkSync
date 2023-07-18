@@ -139,14 +139,25 @@ class SimpleW3:
         account = w3.eth.account.from_key(key)
         return account
 
-    def get_amount(self, w3: Web3, wallet: str, mode: int) -> int:
+    def get_amount(
+            self,
+            w3: Web3,
+            mode: int,
+            wallet: str,
+            eth: float = None
+    ) -> int or None:
         """Функция проверки баланса"""
 
         wallet = self.to_address(address=wallet)
         eth_balance = w3.eth.get_balance(wallet)
         min_amount, max_amount = cst.AMOUNTS[mode]
-        min_amount = int(min_amount * 10 ** 18)
-        max_amount = int(max_amount * 10 ** 18)
+
+        if mode == 1:
+            min_amount = int(min_amount / 100 * eth * 10 ** 18)
+            max_amount = int(max_amount / 100 * eth * 10 ** 18)
+        else:
+            min_amount = int(min_amount * 10 ** 18)
+            max_amount = int(max_amount * 10 ** 18)
 
         if eth_balance < min_amount:  # простая проверка на баланс
             return
@@ -187,6 +198,77 @@ class SimpleW3:
 
             return tx
 
+    def get_decimals(self, w3: Web3, token: ChecksumAddress) -> int:
+        """Функция получения количества цифр после запятой"""
+
+        token_contract = self.get_contract(w3=w3, address=token, abi=ERC20_ABI)
+        decimals = token_contract.functions.decimals().call()
+
+        return decimals
+
+    def get_eth(
+            self,
+            w3: Web3,
+            abi: list,
+            pair_address: ChecksumAddress
+    ) -> float:
+        """Функция перевода из центов в ETH"""
+
+        pair = self.get_contract(w3=w3, address=pair_address, abi=abi)
+        reserves = pair.functions.getReserves().call()
+        tkn0 = pair.functions.token0().call()
+
+        if cst.USDC.lower() == tkn0.lower():
+            token0_res = reserves[0] / 10 ** cst.USDC_DECS
+            token1_res = reserves[1] / 10 ** cst.ETH_DECS
+        else:
+            token0_res = reserves[1] / 10 ** cst.USDC_DECS
+            token1_res = reserves[0] / 10 ** cst.ETH_DECS
+
+        eth = token1_res / token0_res
+
+        return eth
+
+    def check_amount(
+            self,
+            w3: Web3,
+            eth: int,
+            f_abi: list,
+            p_abi: list,
+            token: ChecksumAddress,
+            wallet: ChecksumAddress,
+            f_address: ChecksumAddress
+    ) -> bool:
+        """Функция проверки наличия суммы на балансе равносильной ETH"""
+
+        token_contract = self.get_contract(w3=w3, address=token, abi=ERC20_ABI)
+
+        decs0 = token_contract.functions.decimals().call()
+        decs1 = 18  # HARDCODE ETH
+        balance = token_contract.functions.balanceOf(wallet).call() / 10 ** decs0
+
+        factory = self.get_contract(w3=w3, address=f_address, abi=f_abi)
+        pool_address = factory.functions.getPair(token, self.to_address(cst.ETH), False).call()
+
+        pool = self.get_contract(w3=w3, address=pool_address, abi=p_abi)
+        reserves = pool.functions.getReserves().call()
+
+        tkn0 = pool.functions.token0().call()
+
+        if token.lower() == tkn0.lower():
+            token0_res = reserves[0] / 10 ** decs0
+            token1_res = reserves[1] / 10 ** decs1
+        else:
+            token0_res = reserves[1] / 10 ** decs0
+            token1_res = reserves[0] / 10 ** decs1
+
+        token_balance = balance * (token1_res / token0_res)
+
+        if token_balance > (eth / 10 ** 18):
+            return True
+        else:
+            return False
+
 
 def retry(func):
 
@@ -198,7 +280,6 @@ def retry(func):
                 return func(*args, **kwargs)
             except Exception as err:
                 logger.error(f"\33[{31}mRetry: {err}\033[0m")
-                # kwargs.update({'reconnect': True})  На будущее
-                time.sleep(45)
+                time.sleep(25)
 
     return wrapper

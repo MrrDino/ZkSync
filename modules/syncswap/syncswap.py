@@ -12,9 +12,9 @@ from . import constants as cst
 from .abis.pool import POOL_ABI
 from .abis.router import ROUTER_ABI
 from .abis.factory import FACTORY_ABI
-from global_constants import TOP_UP_WAIT
 from general_abis.erc20 import ERC20_ABI
 from helper import SimpleW3, retry, get_gas
+from global_constants import TOP_UP_WAIT, MIN_LIQUIDITY, MAX_PRICE_IMPACT
 
 
 class SyncSwap(SimpleW3):
@@ -28,8 +28,9 @@ class SyncSwap(SimpleW3):
             mode: int = 0,
             amount: float = None,
             exchange: str = None,
-            pub_key: bool = False
-    ) -> int or None:
+            pub_key: bool = False,
+            shit_coin: bool = False
+    ) -> int or bool:
         """Функция запуска tokens swap для SyncSwap"""
 
         w3 = self.connect()
@@ -37,7 +38,7 @@ class SyncSwap(SimpleW3):
         w3.middleware_onion.add(construct_sign_and_send_raw_middleware(account))
 
         if pub_key:
-            logger.info(f"Work with \33[{35}m{account.address}\033[0m. Exchange: \33[{36}m{exchange}\033[0m")
+            logger.info(f"Work with \33[{35}m{account.address}\033[0m Exchange: \33[{36}m{exchange}\033[0m")
 
         if not amount:
             need_msg = True
@@ -47,9 +48,20 @@ class SyncSwap(SimpleW3):
 
                 if not amount:
                     if need_msg:
-                        logger.error(f"Insufficient balance! Address - {account.address}, key - {key}.")
+                        logger.error(f"Insufficient balance! Address - {account.address} key - {key}.")
                         need_msg = False
-                    time.sleep(TOP_UP_WAIT)  # add TOP_UP_WAIT
+                    time.sleep(TOP_UP_WAIT)
+
+            if not shit_coin:
+                liq_check = self.get_price_impact(
+                    w3=w3,
+                    amount=amount,
+                    token0=self.to_address(token0),
+                    token1=self.to_address(token1)
+                )
+
+                if not liq_check:
+                    return False
 
             self.make_swap(w3=w3, amount=amount, account=account, token0=token0, token1=token1)
             return amount
@@ -148,7 +160,7 @@ class SyncSwap(SimpleW3):
             tx_fee = f"tx fee ${fee}"
 
             logger.info(
-                f'||SWAP to {token_out}| https://www.okx.com/explorer/zksync/tx/{swap_tx.hex()}. '
+                f'||SWAP to {token_out}| https://www.okx.com/explorer/zksync/tx/{swap_tx.hex()} '
                 f'Gas: {gas} gwei, \33[{36}m{tx_fee}\033[0m'
             )
         except Exception as err:
@@ -179,6 +191,13 @@ class SyncSwap(SimpleW3):
             account=account
         )
 
+        pair_address = pool.functions.getPool(
+            self.to_address(cst.ETH),
+            self.to_address(cst.USDC)
+        ).call()
+
+        eth = self.get_eth(w3=w3, abi=POOL_ABI, pair_address=pair_address)
+
         token_in = cst.TOKENS[token0.lower()]
         token_out = cst.TOKENS[token1.lower()]
 
@@ -186,11 +205,11 @@ class SyncSwap(SimpleW3):
             need_msg = True
 
             while not amount:
-                amount = self.get_amount(w3=w3, wallet=account.address, mode=mode)
+                amount = self.get_amount(w3=w3, wallet=account.address, mode=mode, eth=eth)
 
                 if not amount:
                     if need_msg:
-                        logger.error(f"Insufficient balance! Address - {account.address}, key - {key}.")
+                        logger.error(f"Insufficient balance! Address - {account.address} key - {key}")
                         need_msg = False
                     time.sleep(TOP_UP_WAIT)
 
@@ -244,7 +263,7 @@ class SyncSwap(SimpleW3):
             tx_fee = f"tx fee ${fee}"
 
             logger.info(
-                f'||ADD LIQ {token_in}/{token_out}| https://www.okx.com/explorer/zksync/tx/{liq_tx.hex()}. '
+                f'||ADD LIQ {token_in}/{token_out}| https://www.okx.com/explorer/zksync/tx/{liq_tx.hex()} '
                 f'Gas: {gas} gwei, \33[{36}m{tx_fee}\033[0m'
             )
         except Exception as err:
@@ -407,7 +426,7 @@ class SyncSwap(SimpleW3):
                 tx_fee = f"tx fee ${fee}"
 
                 logger.info(
-                    f'||APPROVE| https://www.okx.com/explorer/zksync/tx/{approved_tx.hex()}. '
+                    f'||APPROVE| https://www.okx.com/explorer/zksync/tx/{approved_tx.hex()} '
                     f'Gas: {gas} gwei, \33[{36}m{tx_fee}\033[0m'
                 )
                 logger.info('Wait 50 sec.')
@@ -418,3 +437,70 @@ class SyncSwap(SimpleW3):
                 time.sleep(20)
         except Exception as err:
             logger.error(f"\33[{31}m{err}\033[0m")
+
+    def get_price_impact(
+            self,
+            w3: Web3,
+            amount: int,
+            token0: ChecksumAddress,
+            token1: ChecksumAddress,
+    ) -> float:
+        """Функция получения изменения цены"""
+
+        # classic pool k = x * y <- our choice
+        # stable pool k = x + y
+
+        factory = self.get_contract(w3=w3, address=cst.POOL_FACTORY, abi=FACTORY_ABI)
+        pool_address = factory.functions.getPool(token0, token1).call()
+
+        pool = self.get_contract(w3=w3, address=pool_address, abi=POOL_ABI)
+        reserves = pool.functions.getReserves().call()
+        tkn0 = pool.functions.token0().call()
+
+        decs0 = self.get_decimals(w3=w3, token=token0)
+        decs1 = self.get_decimals(w3=w3, token=token1)
+        amount /= 10 ** decs0
+
+        if token0.lower() == tkn0.lower():
+            token0_res = reserves[0] / 10 ** decs0
+            token1_res = reserves[1] / 10 ** decs1
+        else:
+            token0_res = reserves[1] / 10 ** decs0
+            token1_res = reserves[0] / 10 ** decs1
+
+        if tkn0.lower() == cst.ETH.lower():
+            liquidity = self.get_usd_value(
+                w3=w3,
+                amount=token0_res,
+                pool=self.to_address('0x80115c708E12eDd42E504c1cD52Aea96C547c05c'),
+                token_ch=self.to_address(cst.USDC)
+            ) * 2 / 10 ** 6
+        else:
+            liquidity = self.get_usd_value(
+                w3=w3,
+                amount=token1_res,
+                pool=self.to_address('0x80115c708E12eDd42E504c1cD52Aea96C547c05c'),
+                token_ch=self.to_address(cst.USDC)
+            ) * 2 / 10 ** 6
+
+        if liquidity < MIN_LIQUIDITY:
+            logger.info(f"Pool \33[{35}m{pool_address}\033[0m low liquidity - {round(liquidity, 2)}$")
+            return False
+
+        k = token0_res * token1_res  # constant product
+
+        new_token0_res = token0_res + amount
+        new_token1_res = k / new_token0_res
+
+        old_price = token0_res / token1_res
+        new_price = new_token0_res / new_token1_res
+
+        price_impact = new_price * 100 / old_price - 100
+
+        if price_impact > MAX_PRICE_IMPACT:
+            logger.info(
+                f"Pool \33[{35}m{pool_address}\033[0m high price impact - {round(price_impact, 5)}%"
+            )
+            return False
+
+        return True

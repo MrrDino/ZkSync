@@ -48,12 +48,18 @@ def start():
         else:
             swapper = MuteIO(proxies=proxies)
 
+        amount = False
         token0 = gc.ETH
-        token1 = random.choice(gc.SWAP[exchange])
+        swap_tokens = gc.SWAP[exchange].copy()
 
-        amount = swapper.start_swap(key=key, token0=token0, token1=token1, pub_key=True, exchange=exchange)
+        while not amount and len(swap_tokens) != 0:
+            token1 = random.choice(swap_tokens)
+            amount = swapper.start_swap(key=key, token0=token0, token1=token1, pub_key=True, exchange=exchange)
 
-        if gc.SWAP_BACK:
+            if not amount:
+                swap_tokens.remove(token1)
+
+        if gc.SWAP_BACK and len(swap_tokens) != 0:
             delay = random.randint(gc.DELAY1[0], gc.DELAY1[1])
             logger.info(f"Swap back. Wait {delay}")
             amount = amount / 10 ** 18
@@ -65,14 +71,22 @@ def start():
         logger.info(f"Go to deposit liquidity. Wait {delay}")
         time.sleep(delay)
 
-        token0 = random.choice(gc.LIQ[exchange])
-
         if exchange == 'SyncSwap':
             swapper.add_liquidity(token1=token0, key=key)
         else:
-            swapper.add_liquidity(token0=token0, key=key)
+            result = False
+            liq_tokens = gc.LIQ[exchange].copy()
+
+            while not result and len(liq_tokens) != 0:
+
+                token0 = random.choice(liq_tokens)
+                result = swapper.add_liquidity(token0=token0, key=key)
+
+                if not result:
+                    liq_tokens.remove(token0)
 
         delay = random.randint(gc.DELAY2[0], gc.DELAY2[1])
+
         shit_coin = random.choice(gc.SHIT_COINS)
         logger.info(f"Go to buy shit coin. Wait {delay}")
         time.sleep(delay)
