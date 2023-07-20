@@ -21,8 +21,9 @@ MAX_PRICE_IMPACT = .005
 
 # AMOUNTS IN ETH
 AMOUNTS = {
-    0: (.0040783968, .007646994),  # SWAP
-    1: (50, 300),  # LIQ in cents
+    # 0: (.0040783968, .006646994),  # SWAP
+    0: (.0040783968, .0041783968),  # SWAP
+    1: (50, 250),  # LIQ in cents
     2: (.0040783968, .006046994)  # SHIT COINS
 }
 
@@ -34,7 +35,7 @@ EXCHANGES = {
     0: 'Mute',
     1: 'Velocore',
     2: 'SyncSwap',
-    # 3: 'SpaceFi'  пока в доработке
+    3: 'SpaceFi'
 }
 
 
@@ -43,7 +44,8 @@ TOP_UP_WAIT = 10  # waiting for a wallet refill
 DELAY1 = (10, 60)  # timeout between swaps
 DELAY2 = (10, 60)  # timeout between swap & liquidity
 DELAY3 = (10, 60)  # timeout between liquidity & shit coin
-DELAY4 = (10, 60)  # timeout between wallets
+DELAY4 = (10, 60)  # timeout between shitcoins buy and mint
+DELAY5 = (10, 60)  # timeout between change wallets
 
 
 SWAP = {
@@ -66,13 +68,13 @@ SWAP = {
         '0x8e86e46278518efc1c5ced245cba2c7e3ef11557',  # USD+
     ],
     'SpaceFi': [
-        '0x3355df6D4c9C3035724Fd0e3914dE96A5a83aaf4',  # USDC
+        '0x3355df6d4c9c3035724fd0e3914de96a5a83aaf4',  # USDC
         '0x493257fD37EDB34451f62EDf8D2a0C418852bA4C',  # USDT
-        '0x2039bb4116B4EFc145Ec4f0e2eA75012D6C0f181',  # BUSD
-        '0xfC7E56298657B002b3e656400E746b7212912757',  # ZkUSD
-        '0x503234F203fC7Eb888EEC8513210612a43Cf6115',  # LUSD
-        '0x8e86e46278518efc1c5ced245cba2c7e3ef11557',  # USD+
-        '0xb4c1544cb4163f4c2eca1ae9ce999f63892d912a',  # FRAX
+        '0x2039bb4116B4EFc145Ec4f0e2eA75012D6C0f181',  # BUSD,
+        '0xfC7E56298657B002b3e656400E746b7212912757',  # ZkUSD,
+        '0x503234F203fC7Eb888EEC8513210612a43Cf6115',  # LUSD,
+        '0x8e86e46278518efc1c5ced245cba2c7e3ef11557',  # USD+,
+        '0xb4c1544cb4163f4c2eca1ae9ce999f63892d912a',  # FRAX,
     ]
 }
 
@@ -92,7 +94,9 @@ LIQ = {
         '0xbbeb516fb02a01611cbbe0453fe3c580d7281011',  # WBTC
     ],
     'SpaceFi': [
-
+        '0x0e97c7a0f8b2c9885c8ac9fc6136e829cbc21d42',  # MUTE
+        '0x3355df6d4c9c3035724fd0e3914de96a5a83aaf4',  # USDC
+        '0x493257fD37EDB34451f62EDf8D2a0C418852bA4C',  # USDT
     ]
 }
 

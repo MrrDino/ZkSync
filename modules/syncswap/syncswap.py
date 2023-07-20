@@ -2,6 +2,8 @@ import web3
 import time
 import eth_abi
 
+import global_constants as gc
+
 from web3 import Web3
 from loguru import logger
 from web3.types import TxParams, ChecksumAddress
@@ -12,9 +14,7 @@ from . import constants as cst
 from .abis.pool import POOL_ABI
 from .abis.router import ROUTER_ABI
 from .abis.factory import FACTORY_ABI
-from general_abis.erc20 import ERC20_ABI
 from helper import SimpleW3, retry, get_gas
-from global_constants import TOP_UP_WAIT, MIN_LIQUIDITY, MAX_PRICE_IMPACT
 
 
 class SyncSwap(SimpleW3):
@@ -50,7 +50,7 @@ class SyncSwap(SimpleW3):
                     if need_msg:
                         logger.error(f"Insufficient balance! Address - {account.address} key - {key}.")
                         need_msg = False
-                    time.sleep(TOP_UP_WAIT)
+                    time.sleep(gc.TOP_UP_WAIT)
 
             if not shit_coin:
                 liq_check = self.get_price_impact(
@@ -71,10 +71,10 @@ class SyncSwap(SimpleW3):
     def make_swap(
             self,
             w3: Web3,
+            token0: str,
+            token1: str,
             amount: int or float,
-            account: LocalAccount,
-            token0: str = cst.ETH,
-            token1: str = cst.USDC
+            account: LocalAccount
     ):
         """Функция выполнения обмена для SyncSwap"""
 
@@ -91,7 +91,7 @@ class SyncSwap(SimpleW3):
 
         #  Если повторный свап -> переводим сумму из ETH в USDC
         if isinstance(amount, float):
-            amount = self.get_usd_value(w3=w3, amount=amount, pool=pool_address, token_ch=token0)
+            amount = self.get_usd_value(w3=w3, amount=amount, token_ch=token0)
 
         if token_in != 'ETH':
             self.approve(
@@ -133,17 +133,14 @@ class SyncSwap(SimpleW3):
         )
 
         gas_price = w3.eth.gas_price
-        swap_tx.update(
-            {
-                'gas': w3.eth.estimate_gas(swap_tx),
-                'maxFeePerGas': gas_price,
-                'maxPriorityFeePerGas': gas_price
-            }
-        )
+        swap_tx['maxFeePerGas'] = int(gas_price * 1.1)
+        swap_tx['maxPriorityFeePerGas'] = gas_price
+        swap_tx['gas'] = w3.eth.estimate_gas(swap_tx)
 
         signed_tx = account.sign_transaction(transaction_dict=swap_tx)
         logger.info("Swap transaction signed. Wait 30 sec.")
         time.sleep(30)
+
         status = 0
 
         try:
@@ -179,7 +176,7 @@ class SyncSwap(SimpleW3):
 
         amount = None
         w3 = self.connect()
-        token0 = self.to_address(cst.ETH)
+        token0 = self.to_address(gc.ETH)
         account = self.get_account(w3=w3, key=key)
         router = self.get_contract(w3=w3, address=cst.ROUTER, abi=ROUTER_ABI)
         w3.middleware_onion.add(construct_sign_and_send_raw_middleware(account))
@@ -192,10 +189,9 @@ class SyncSwap(SimpleW3):
         )
 
         pair_address = pool.functions.getPool(
-            self.to_address(cst.ETH),
-            self.to_address(cst.USDC)
+            self.to_address(gc.ETH),
+            self.to_address(gc.USDC)
         ).call()
-
         eth = self.get_eth(w3=w3, abi=POOL_ABI, pair_address=pair_address)
 
         token_in = cst.TOKENS[token0.lower()]
@@ -211,10 +207,10 @@ class SyncSwap(SimpleW3):
                     if need_msg:
                         logger.error(f"Insufficient balance! Address - {account.address} key - {key}")
                         need_msg = False
-                    time.sleep(TOP_UP_WAIT)
+                    time.sleep(gc.TOP_UP_WAIT)
 
         if token_in != 'ETH':
-            amount = self.get_usd_value(w3=w3, amount=amount, pool=pool_address, token_ch=token0)
+            amount = self.get_usd_value(w3=w3, amount=amount, token_ch=token0)
 
             self.approve(
                 w3=w3,
@@ -237,17 +233,14 @@ class SyncSwap(SimpleW3):
         )
 
         gas_price = w3.eth.gas_price
-        liq_tx.update(
-            {
-                'gas': w3.eth.estimate_gas(liq_tx),
-                'maxFeePerGas': gas_price,
-                'maxPriorityFeePerGas': gas_price
-            }
-        )
+        liq_tx['maxFeePerGas'] = int(gas_price * 1.1)
+        liq_tx['maxPriorityFeePerGas'] = gas_price
+        liq_tx['gas'] = w3.eth.estimate_gas(liq_tx)
 
         signed_tx = account.sign_transaction(transaction_dict=liq_tx)
         logger.info("Liquidity transaction signed. Wait 30 sec.")
         time.sleep(30)
+
         status = 0
 
         try:
@@ -284,7 +277,7 @@ class SyncSwap(SimpleW3):
         token0 = self.to_address(token0)
         token1 = self.to_address(token1)
 
-        pool = self.get_contract(w3=w3, address=cst.POOL_FACTORY, abi=FACTORY_ABI)
+        pool = self.get_contract(w3=w3, address=cst.FACTORY, abi=FACTORY_ABI)
         pool_address = pool.functions.getPool(token0, token1).call()
 
         return [pool, token0, token1, pool_address, account.address]
@@ -326,20 +319,20 @@ class SyncSwap(SimpleW3):
 
         return txn
 
-    @staticmethod
     def create_swap_tx(
-            router: web3.contract.Contract,
-            wallet: ChecksumAddress,
-            token_in: str,
-            amount: int,
-            paths: list,
+            self,
             w3: Web3,
+            paths: list,
+            amount: int,
+            token_in: str,
+            wallet: ChecksumAddress,
+            router: web3.contract.Contract,
     ) -> TxParams:
 
         txn = router.functions.swap(
             paths,
             0,
-            int(time.time()) + 1800,
+            self.deadline(),
         ).build_transaction({
             'gas': 0,
             'from': wallet,
@@ -355,39 +348,41 @@ class SyncSwap(SimpleW3):
             self,
             w3: Web3,
             amount: float,
-            pool: ChecksumAddress,
             token_ch: ChecksumAddress,
     ) -> int:
         """Функция получения курса в пуле"""
 
-        token_contract = w3.eth.contract(address=token_ch, abi=ERC20_ABI)
-        decs = token_contract.functions.decimals().call()
+        token0_res, token1_res, tkn0, decs0, decs1 = self.get_reserves(
+            w3=w3,
+            stable=False,  # parameter is unnecessary
+            p_abi=POOL_ABI,
+            f_abi=FACTORY_ABI,
+            exchange='SyncSwap',
+            f_address=cst.FACTORY,
+            token0=self.to_address(gc.USDC),
+            token1=self.to_address(gc.ETH),
+        )
 
-        contract = self.get_contract(w3=w3, address=pool, abi=POOL_ABI)
-        reserves = contract.functions.getReserves().call()
-        token0 = contract.functions.token0().call()
-
-        if cst.TOKENS[token0.lower()] == 'ETH':
-            usd = int(reserves[1] / reserves[0] * 10 ** (18 - decs))
+        if cst.TOKENS[tkn0.lower()] == 'ETH':
+            usd = int(token1_res / token1_res)
         else:
-            usd = int(reserves[0] / reserves[1] * 10 ** (18 - decs))
+            usd = int(token0_res / token1_res)
 
         usd -= usd * cst.MULTS[token_ch.lower()]
 
-        return int(amount * usd * (10 ** decs))
+        return int(amount * usd * (10 ** decs0))
 
     def get_fee(
             self,
             w3: Web3,
             gas_price: int,
             gas_used: float,
-            pool: ChecksumAddress = '0x80115c708E12eDd42E504c1cD52Aea96C547c05c'  # Default ETH/USDC
     ) -> float:
         """Функция получения комиссии транзакции в долларах"""
 
         amount = (gas_used * gas_price) / 10 ** 18
-        token1 = self.to_address('0x3355df6D4c9C3035724Fd0e3914dE96A5a83aaf4')
-        fee = self.get_usd_value(w3=w3, amount=amount, pool=pool, token_ch=token1)
+        token1 = self.to_address(gc.USDC)
+        fee = self.get_usd_value(w3=w3, amount=amount, token_ch=token1)
 
         return round((fee / 10 ** 6), 2)
 
@@ -444,47 +439,41 @@ class SyncSwap(SimpleW3):
             amount: int,
             token0: ChecksumAddress,
             token1: ChecksumAddress,
+            stable: bool = False,
     ) -> float:
         """Функция получения изменения цены"""
 
         # classic pool k = x * y <- our choice
         # stable pool k = x + y
 
-        factory = self.get_contract(w3=w3, address=cst.POOL_FACTORY, abi=FACTORY_ABI)
-        pool_address = factory.functions.getPool(token0, token1).call()
+        pool_name = f'{cst.TOKENS[token0.lower()]}/{cst.TOKENS[token1.lower()]}'
+        token0_res, token1_res, tkn0, decs0, decs1 = self.get_reserves(
+            w3=w3,
+            stable=stable,
+            token0=token0,
+            token1=token1,
+            p_abi=POOL_ABI,
+            f_abi=FACTORY_ABI,
+            f_address=cst.FACTORY
+        )
 
-        pool = self.get_contract(w3=w3, address=pool_address, abi=POOL_ABI)
-        reserves = pool.functions.getReserves().call()
-        tkn0 = pool.functions.token0().call()
-
-        decs0 = self.get_decimals(w3=w3, token=token0)
-        decs1 = self.get_decimals(w3=w3, token=token1)
         amount /= 10 ** decs0
 
-        if token0.lower() == tkn0.lower():
-            token0_res = reserves[0] / 10 ** decs0
-            token1_res = reserves[1] / 10 ** decs1
-        else:
-            token0_res = reserves[1] / 10 ** decs0
-            token1_res = reserves[0] / 10 ** decs1
-
-        if tkn0.lower() == cst.ETH.lower():
+        if tkn0.lower() == gc.ETH.lower():
             liquidity = self.get_usd_value(
                 w3=w3,
                 amount=token0_res,
-                pool=self.to_address('0x80115c708E12eDd42E504c1cD52Aea96C547c05c'),
-                token_ch=self.to_address(cst.USDC)
+                token_ch=self.to_address(gc.USDC)
             ) * 2 / 10 ** 6
         else:
             liquidity = self.get_usd_value(
                 w3=w3,
                 amount=token1_res,
-                pool=self.to_address('0x80115c708E12eDd42E504c1cD52Aea96C547c05c'),
-                token_ch=self.to_address(cst.USDC)
+                token_ch=self.to_address(gc.USDC)
             ) * 2 / 10 ** 6
 
-        if liquidity < MIN_LIQUIDITY:
-            logger.info(f"Pool \33[{35}m{pool_address}\033[0m low liquidity - {round(liquidity, 2)}$")
+        if liquidity < gc.MIN_LIQUIDITY:
+            logger.info(f"Pool \33[{35}m{pool_name}\033[0m low liquidity - {round(liquidity, 2)}$")
             return False
 
         k = token0_res * token1_res  # constant product
@@ -497,9 +486,9 @@ class SyncSwap(SimpleW3):
 
         price_impact = new_price * 100 / old_price - 100
 
-        if price_impact > MAX_PRICE_IMPACT:
+        if price_impact > gc.MAX_PRICE_IMPACT:
             logger.info(
-                f"Pool \33[{35}m{pool_address}\033[0m high price impact - {round(price_impact, 5)}%"
+                f"Pool \33[{35}m{pool_name}\033[0m high price impact - {round(price_impact, 5)}%"
             )
             return False
 

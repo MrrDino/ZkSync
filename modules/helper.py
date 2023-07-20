@@ -4,6 +4,7 @@ import time
 import web3
 import json
 import random
+import requests
 import functools
 
 import global_constants as cst
@@ -12,6 +13,7 @@ from web3 import Web3
 from loguru import logger
 from hexbytes.main import HexBytes
 from web3.types import ChecksumAddress
+from requests.adapters import HTTPAdapter, Retry
 from eth_account.signers.local import LocalAccount
 
 from general_abis.erc20 import ERC20_ABI
@@ -96,6 +98,8 @@ def check_connection(w3: Web3) -> bool:
 class SimpleW3:
 
     def __init__(self, proxies: list):
+        self.url = 'https://api.dexscreener.io/latest/dex/pairs/zksync/'
+        self.pool = '0x80115c708E12eDd42E504c1cD52Aea96C547c05c'
         self.node_url = cst.ZK_NODE
         self.proxies = proxies
 
@@ -237,30 +241,25 @@ class SimpleW3:
             p_abi: list,
             token: ChecksumAddress,
             wallet: ChecksumAddress,
-            f_address: ChecksumAddress
+            f_address: ChecksumAddress,
+            exchange: str = 'NO',
+            stable: bool = False
     ) -> bool:
         """Функция проверки наличия суммы на балансе равносильной ETH"""
 
+        token0_res, token1_res, tkn0, decs0, decs1 = self.get_reserves(
+            w3=w3,
+            p_abi=p_abi,
+            f_abi=f_abi,
+            token0=token,
+            stable=stable,
+            exchange=exchange,
+            f_address=f_address,
+            token1=self.to_address(cst.ETH),
+        )
+
         token_contract = self.get_contract(w3=w3, address=token, abi=ERC20_ABI)
-
-        decs0 = token_contract.functions.decimals().call()
-        decs1 = 18  # HARDCODE ETH
         balance = token_contract.functions.balanceOf(wallet).call() / 10 ** decs0
-
-        factory = self.get_contract(w3=w3, address=f_address, abi=f_abi)
-        pool_address = factory.functions.getPair(token, self.to_address(cst.ETH), False).call()
-
-        pool = self.get_contract(w3=w3, address=pool_address, abi=p_abi)
-        reserves = pool.functions.getReserves().call()
-
-        tkn0 = pool.functions.token0().call()
-
-        if token.lower() == tkn0.lower():
-            token0_res = reserves[0] / 10 ** decs0
-            token1_res = reserves[1] / 10 ** decs1
-        else:
-            token0_res = reserves[1] / 10 ** decs0
-            token1_res = reserves[0] / 10 ** decs1
 
         token_balance = balance * (token1_res / token0_res)
 
@@ -268,6 +267,86 @@ class SimpleW3:
             return True
         else:
             return False
+
+    def get_reserves(
+            self,
+            w3: Web3,
+            f_abi: list,
+            p_abi: list,
+            stable: bool,
+            token0: ChecksumAddress,
+            token1: ChecksumAddress,
+            f_address: ChecksumAddress,
+            exchange: str = 'NO'
+    ) -> [float, float, ChecksumAddress, int, int]:
+        """Функция получения резервов пула"""
+
+        factory = self.get_contract(w3=w3, address=f_address, abi=f_abi)
+
+        if exchange == 'SyncSwap':
+            pool_address = factory.functions.getPool(token0, token1).call()
+        elif exchange == 'SpaceFi':
+            pool_address = factory.functions.getPair(token0, token1).call()
+        else:
+            pool_address = factory.functions.getPair(token0, token1, stable).call()
+
+        pool = self.get_contract(w3=w3, address=pool_address, abi=p_abi)
+        reserves = pool.functions.getReserves().call()
+
+        decs0 = self.get_decimals(w3=w3, token=token0)
+        decs1 = self.get_decimals(w3=w3, token=token1)
+        tkn0 = pool.functions.token0().call()
+
+        if token0.lower() == tkn0.lower():
+            token0_res = reserves[0] / 10 ** decs0
+            token1_res = reserves[1] / 10 ** decs1
+        else:
+            token0_res = reserves[1] / 10 ** decs0
+            token1_res = reserves[0] / 10 ** decs1
+
+        return [token0_res, token1_res, tkn0, decs0, decs1]
+
+    @staticmethod
+    def deadline() -> int:
+        """Функция возвращения параметра deadline"""
+
+        return int(time.time()) + 600
+
+    def get_fee_by_url(self, gas_used: int, gas_price: int) -> float:
+        """Функция получения комиссии транзакции в долларах"""
+
+        price = None
+        attempts = 5
+        amount = (gas_used * gas_price) / 10 ** 18
+
+        client = requests.Session()
+        # proxy = random.choice(self.proxies)
+        # client.proxies = dict(http=proxy, https=proxy)  мои прокси не проходят
+        retries = Retry(
+            total=15,
+            backoff_factor=0.1,
+            status_forcelist=[500, 502, 503, 504]
+        )
+
+        client.mount('http://', HTTPAdapter(max_retries=retries))
+
+        while not price and attempts != 0:
+            try:
+                response = client.get(url=f"{self.url}{self.pool}")
+
+                if response.status_code != 200:
+                    raise Exception
+
+                data = response.json()
+                price = float(data['pairs'][0]['priceUsd'])
+            except Exception as err:
+                logger.error(err)
+                attempts -= 1
+                time.sleep(2)
+
+        fee_price = amount * price
+
+        return round(fee_price, 2)
 
 
 def retry(func):

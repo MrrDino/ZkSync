@@ -1,6 +1,7 @@
 import web3
 import time
 
+import global_constants as gc
 
 from web3 import Web3
 from loguru import logger
@@ -13,7 +14,6 @@ from .abis.pair import PAIR_ABI
 from .abis.router import ROUTER_ABI
 from .abis.factory import FACTORY_ABI
 from helper import SimpleW3, retry, get_gas
-from global_constants import TOP_UP_WAIT, MIN_LIQUIDITY, MAX_PRICE_IMPACT
 
 
 class MuteIO(SimpleW3):
@@ -48,7 +48,7 @@ class MuteIO(SimpleW3):
                     if need_msg:
                         logger.error(f"Insufficient balance! Address - {account.address} key - {key}")
                         need_msg = False
-                    time.sleep(TOP_UP_WAIT)
+                    time.sleep(gc.TOP_UP_WAIT)
 
             router = self.get_contract(w3=w3, address=cst.ROUTER, abi=ROUTER_ABI)
 
@@ -102,7 +102,7 @@ class MuteIO(SimpleW3):
                 0,
                 [token0, token1],
                 signer,
-                int(time.time()) + 1800,
+                self.deadline(),
                 [False, False]
             ).build_transaction({
                 'gas': 0,
@@ -129,7 +129,7 @@ class MuteIO(SimpleW3):
                 0,
                 [token0, token1],
                 signer,
-                int(time.time()) + 1800,
+                self.deadline(),
                 [False, False]
             ).build_transaction({
                 'gas': 0,
@@ -141,13 +141,9 @@ class MuteIO(SimpleW3):
             })
 
         gas_price = w3.eth.gas_price
-        swap_tx.update(
-            {
-                'gas': w3.eth.estimate_gas(swap_tx),
-                'maxFeePerGas': gas_price,
-                'maxPriorityFeePerGas': gas_price
-            }
-        )
+        swap_tx['maxFeePerGas'] = int(gas_price * 1.1)
+        swap_tx['maxPriorityFeePerGas'] = gas_price
+        swap_tx['gas'] = w3.eth.estimate_gas(swap_tx)
 
         signed_tx = account.sign_transaction(transaction_dict=swap_tx)
         logger.info("Swap transaction signed. Wait 30 sec.")
@@ -182,8 +178,8 @@ class MuteIO(SimpleW3):
         """Функция добавления ликвидности для Mute.io"""
 
         amount = None
-        token1 = self.to_address(cst.ETH)
         w3 = self.connect()
+        token1 = self.to_address(gc.ETH)
         account = self.get_account(w3=w3, key=key)
         w3.middleware_onion.add(construct_sign_and_send_raw_middleware(account))
 
@@ -195,8 +191,8 @@ class MuteIO(SimpleW3):
         )
         factory = self.get_contract(w3=w3, address=cst.FACTORY, abi=FACTORY_ABI)
         pair_address = factory.functions.getPair(
-            self.to_address(cst.ETH),
-            self.to_address(cst.USDC),
+            self.to_address(gc.ETH),
+            self.to_address(gc.USDC),
             False
         ).call()
 
@@ -215,7 +211,7 @@ class MuteIO(SimpleW3):
                     if need_msg:
                         logger.error(f"Insufficient balance! Address - {account.address} key - {key}")
                         need_msg = False
-                    time.sleep(TOP_UP_WAIT)
+                    time.sleep(gc.TOP_UP_WAIT)
 
         balance_check = self.check_amount(
             w3=w3,
@@ -226,6 +222,7 @@ class MuteIO(SimpleW3):
             f_abi=FACTORY_ABI,
             f_address=cst.FACTORY
         )
+
         if not balance_check:
             logger.info(f"Insufficient balance of token \33[{36}m{token0}\033[0m")
             return False
@@ -249,7 +246,7 @@ class MuteIO(SimpleW3):
             cst.MIN_AMOUNT,
             cst.MIN_AMOUNT,
             signer,
-            int(time.time()) + 1800,
+            self.deadline(),
             cst.FEES[token0.lower()],
             False
         ).build_transaction({
@@ -262,13 +259,9 @@ class MuteIO(SimpleW3):
         })
 
         gas_price = w3.eth.gas_price
-        liq_tx.update(
-            {
-                'gas': w3.eth.estimate_gas(liq_tx),
-                'maxFeePerGas': gas_price,
-                'maxPriorityFeePerGas': gas_price
-            }
-        )
+        liq_tx['maxFeePerGas'] = int(gas_price * 1.1)
+        liq_tx['maxPriorityFeePerGas'] = gas_price
+        liq_tx['gas'] = w3.eth.estimate_gas(liq_tx)
 
         signed_tx = account.sign_transaction(transaction_dict=liq_tx)
         logger.info("Liquidity transaction signed. Wait 30 sec.")
@@ -413,37 +406,31 @@ class MuteIO(SimpleW3):
             token1: ChecksumAddress,
             router: web3.contract.Contract,
             stable: bool = False,
-            deposit: bool = False
     ) -> bool:
         """Функция получения изменения цены"""
 
         # stable pool (x^3 * y) + (y^3 * x) >= k
         # normal pool x * y >= k  <- our choice
 
-        factory = self.get_contract(w3=w3, address=cst.FACTORY, abi=FACTORY_ABI)
-        pool_address = factory.functions.getPair(token0, token1, stable).call()
+        pool_name = f'{cst.TOKENS[token0.lower()]}/{cst.TOKENS[token1.lower()]}'
+        token0_res, token1_res, tkn0, decs0, decs1 = self.get_reserves(
+            w3=w3,
+            stable=stable,
+            token0=token0,
+            token1=token1,
+            p_abi=PAIR_ABI,
+            f_abi=FACTORY_ABI,
+            f_address=cst.FACTORY
+        )
 
-        pool = self.get_contract(w3=w3, address=pool_address, abi=PAIR_ABI)
-        reserves = pool.functions.getReserves().call()
-        tkn0 = pool.functions.token0().call()
-
-        decs0 = self.get_decimals(w3=w3, token=token0)
-        decs1 = self.get_decimals(w3=w3, token=token1)
         amount /= 10 ** decs0
 
-        if token0.lower() == tkn0.lower():
-            token0_res = reserves[0] / 10 ** decs0
-            token1_res = reserves[1] / 10 ** decs1
-        else:
-            token0_res = reserves[1] / 10 ** decs0
-            token1_res = reserves[0] / 10 ** decs1
-
-        if tkn0.lower() == cst.ETH.lower():
+        if tkn0.lower() == gc.ETH.lower():
             liquidity = self.get_usd_value(
                 amount=token0_res,
                 token_in='ETH',
-                token0=self.to_address(cst.ETH),
-                token1=self.to_address(cst.USDC),
+                token0=self.to_address(gc.ETH),
+                token1=self.to_address(gc.USDC),
                 router=router,
                 liq=True
             ) * 2 / 10 ** 6
@@ -451,33 +438,29 @@ class MuteIO(SimpleW3):
             liquidity = self.get_usd_value(
                 amount=token1_res,
                 token_in='ETH',
-                token0=self.to_address(cst.ETH),
-                token1=self.to_address(cst.USDC),
+                token0=self.to_address(gc.ETH),
+                token1=self.to_address(gc.USDC),
                 router=router,
                 liq=True
             ) * 2 / 10 ** 6
 
-        if liquidity < MIN_LIQUIDITY:
-            logger.info(f"Pool \33[{35}m{pool_address}\033[0m low liquidity - {round(liquidity, 2)}$")
+        if liquidity < gc.MIN_LIQUIDITY:
+            logger.info(f"Pool \33[{35}m{pool_name}\033[0m low liquidity - {round(liquidity, 2)}$")
             return False
 
         k = token0_res * token1_res  # constant product
 
         new_token0_res = token0_res + amount
-
-        if deposit:
-            new_token1_res = token1_res
-        else:
-            new_token1_res = k / new_token0_res
+        new_token1_res = k / new_token0_res
 
         old_price = token0_res / token1_res
         new_price = new_token0_res / new_token1_res
 
         price_impact = new_price * 100 / old_price - 100
 
-        if price_impact > MAX_PRICE_IMPACT:
+        if price_impact > gc.MAX_PRICE_IMPACT:
             logger.info(
-                f"Pool \33[{35}m{pool_address}\033[0m high price impact - {round(price_impact, 5)}%"
+                f"Pool \33[{35}m{pool_name}\033[0m high price impact - {round(price_impact, 5)}%"
             )
             return False
 

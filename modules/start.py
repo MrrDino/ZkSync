@@ -6,6 +6,7 @@ import global_constants as gc
 from loguru import logger
 
 from mute.mute import MuteIO
+from nft.mint_nft import Minter
 from spacefi.spacefi import SpaceFi
 from velocore.velocore import Velocore
 from syncswap.syncswap import SyncSwap
@@ -37,7 +38,7 @@ def start():
                 logger.info(f'High gas. Wait {gc.TIMEOUT} sec.')
                 time.sleep(gc.TIMEOUT)
 
-        exchange = gc.EXCHANGES[random.randint(0, 2)]  # В данный момент SpaceFi(№3) лагает
+        exchange = gc.EXCHANGES[random.randint(0, 3)]  # В данный момент SpaceFi(№3) лагает
 
         if exchange == 'SyncSwap':
             swapper = SyncSwap(proxies=proxies)
@@ -85,7 +86,7 @@ def start():
                 if not result:
                     liq_tokens.remove(token0)
 
-        delay = random.randint(gc.DELAY2[0], gc.DELAY2[1])
+        delay = random.randint(gc.DELAY3[0], gc.DELAY3[1])
 
         shit_coin = random.choice(gc.SHIT_COINS)
         logger.info(f"Go to buy shit coin. Wait {delay}")
@@ -93,7 +94,13 @@ def start():
 
         buy_shitcoin(shit_coin=shit_coin, key=key, proxies=proxies)
 
-        delay = random.randint(gc.DELAY2[0], gc.DELAY2[1])
+        delay = random.randint(gc.DELAY4[0], gc.DELAY4[1])
+        logger.info(f"Go to mint NFT. Wait {delay}")
+
+        minter = Minter(proxies=proxies)
+        minter.start_mint(key=key)
+
+        delay = random.randint(gc.DELAY5[0], gc.DELAY5[1])
         logger.info(f"Change wallets. Wait {delay}")
         time.sleep(delay)
 

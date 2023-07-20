@@ -1,19 +1,10 @@
-from web3 import Web3
+URL = 'https://api.dexscreener.io/latest/dex/search?q='
 
+ROUTER = '0xbBF1EE38152E9D8e3470Dc47947eAa65DcA94913'
 
-WITHDRAW_MODE = 1
+FACTORY = '0xEb6625D65a0553c9dBc64449e56abFe519bd9c9B'
 
-
-MINT = 0
-MIN_LIQ = 0
-
-
-ROUTER = '0x2da10A1e27bF85cEdD8FFb1AbBe97e53391C0295'
-FACTORY = '0xf2DAd89f2788a8CD54625C60b55cD3d2D0ACa7Cb'
-
-
-ZERO_ADDRESS = Web3.to_checksum_address('0x0000000000000000000000000000000000000000')
-
+SLIPPAGE = 0.01  # <- 1%
 
 TOKENS = {
     '0x493257fd37edb34451f62edf8d2a0c418852ba4c': 'USDT',
@@ -35,16 +26,12 @@ TOKENS = {
     '0xb54aae4a0743aeec1d584f2b2abc1ebdc12f1b0f': 'frxETH'
 }
 
-
-#  В пулах со стейбл коинами не точное соотношение, для этого нужны данные погрешности
-MULTS = {
-    '0x493257fd37edb34451f62edf8d2a0c418852ba4c': .006,  # USDT
-    '0x3355df6d4c9c3035724fd0e3914de96a5a83aaf4': .0034,  # USDC
-    '0x2039bb4116b4efc145ec4f0e2ea75012d6c0f181': .002,  # BUSD
-    '0xfc7e56298657b002b3e656400e746b7212912757': .002,  # ZkUSD
-    '0x503234f203fc7eb888eec8513210612a43cf6115': .002,  # LUSD
-    '0x8e86e46278518efc1c5ced245cba2c7e3ef11557': .0007,  # USD+
-    '0xb4c1544cb4163f4c2eca1ae9ce999f63892d912a': .004,  # FRAX
+DECIMALS = {
+    '0x493257fd37edb34451f62edf8d2a0c418852ba4c': 6,
+    '0x3355df6d4c9c3035724fd0e3914de96a5a83aaf4': 6,
+    '0x5aea5775959fbc2557cc8789bc1bf90a239d9a91': 18,
 }
 
-# '0xb4c1544cb4163f4c2eca1ae9ce999f63892d912a',  # FRAX <- не поменялся обратно
+POOLS = {
+    'ETH/USDC': '0x74a8f079eb015375b5dbb3ee98cbb1b91089323f'
+}
