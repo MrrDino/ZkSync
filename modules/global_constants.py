@@ -6,6 +6,8 @@ USDC = '0x3355df6d4c9c3035724fd0e3914de96a5a83aaf4'
 ETH = '0x5aea5775959fbc2557cc8789bc1bf90a239d9a91'
 
 
+DIVIDER = 10  # keys quantity in 1 task
+
 USDC_DECS = 6
 ETH_DECS = 18
 

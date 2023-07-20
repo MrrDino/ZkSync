@@ -1,14 +1,13 @@
 import web3
-import time
 import eth_abi
+import asyncio
 
 import global_constants as gc
 
-from web3 import Web3
 from loguru import logger
+from web3 import AsyncWeb3
 from web3.types import TxParams, ChecksumAddress
 from eth_account.signers.local import LocalAccount
-from web3.middleware import construct_sign_and_send_raw_middleware
 
 from . import constants as cst
 from .abis.pool import POOL_ABI
@@ -20,7 +19,7 @@ from helper import SimpleW3, retry, get_gas
 class SyncSwap(SimpleW3):
 
     @retry
-    def start_swap(
+    async def start_swap(
             self,
             key: str,
             token0: str,
@@ -33,9 +32,8 @@ class SyncSwap(SimpleW3):
     ) -> int or bool:
         """Функция запуска tokens swap для SyncSwap"""
 
-        w3 = self.connect()
+        w3 = await self.connect()
         account = self.get_account(w3=w3, key=key)
-        w3.middleware_onion.add(construct_sign_and_send_raw_middleware(account))
 
         if pub_key:
             logger.info(f"Work with \33[{35}m{account.address}\033[0m Exchange: \33[{36}m{exchange}\033[0m")
@@ -44,16 +42,16 @@ class SyncSwap(SimpleW3):
             need_msg = True
 
             while not amount:
-                amount = self.get_amount(w3=w3, wallet=account.address, mode=mode)
+                amount = await self.get_amount(w3=w3, wallet=account.address, mode=mode)
 
                 if not amount:
                     if need_msg:
                         logger.error(f"Insufficient balance! Address - {account.address} key - {key}.")
                         need_msg = False
-                    time.sleep(gc.TOP_UP_WAIT)
+                    await asyncio.sleep(gc.TOP_UP_WAIT)
 
             if not shit_coin:
-                liq_check = self.get_price_impact(
+                liq_check = await self.get_price_impact(
                     w3=w3,
                     amount=amount,
                     token0=self.to_address(token0),
@@ -63,22 +61,22 @@ class SyncSwap(SimpleW3):
                 if not liq_check:
                     return False
 
-            self.make_swap(w3=w3, amount=amount, account=account, token0=token0, token1=token1)
+            await self.make_swap(w3=w3, amount=amount, account=account, token0=token0, token1=token1)
             return amount
         else:
-            self.make_swap(w3=w3, amount=amount, account=account, token0=token0, token1=token1)
+            await self.make_swap(w3=w3, amount=amount, account=account, token0=token0, token1=token1)
 
-    def make_swap(
+    async def make_swap(
             self,
-            w3: Web3,
             token0: str,
             token1: str,
+            w3: AsyncWeb3,
             amount: int or float,
             account: LocalAccount
     ):
         """Функция выполнения обмена для SyncSwap"""
 
-        pool, token0, token1, pool_address, signer = self.preparing(
+        pool, token0, token1, pool_address, signer = await self.preparing(
             w3=w3,
             token0=token0,
             token1=token1,
@@ -91,10 +89,10 @@ class SyncSwap(SimpleW3):
 
         #  Если повторный свап -> переводим сумму из ETH в USDC
         if isinstance(amount, float):
-            amount = self.get_usd_value(w3=w3, amount=amount, token_ch=token0)
+            amount = await self.get_usd_value(w3=w3, amount=amount, token_ch=token0)
 
         if token_in != 'ETH':
-            self.approve(
+            await self.approve(
                 w3=w3,
                 token=token0,
                 signer=signer,
@@ -123,7 +121,7 @@ class SyncSwap(SimpleW3):
             }
         ]
 
-        swap_tx = self.create_swap_tx(
+        swap_tx = await self.create_swap_tx(
             w3=w3,
             paths=paths,
             wallet=signer,
@@ -132,24 +130,24 @@ class SyncSwap(SimpleW3):
             token_in=token_in
         )
 
-        gas_price = w3.eth.gas_price
+        gas_price = await w3.eth.gas_price
         swap_tx['maxFeePerGas'] = int(gas_price * 1.1)
         swap_tx['maxPriorityFeePerGas'] = gas_price
-        swap_tx['gas'] = w3.eth.estimate_gas(swap_tx)
+        swap_tx['gas'] = await w3.eth.estimate_gas(swap_tx)
 
         signed_tx = account.sign_transaction(transaction_dict=swap_tx)
         logger.info("Swap transaction signed. Wait 20 sec.")
-        time.sleep(20)
+        await asyncio.sleep(20)
 
         status = 0
 
         try:
-            swap_tx = w3.eth.send_raw_transaction(transaction=signed_tx.rawTransaction)
-            tx_rec = w3.eth.wait_for_transaction_receipt(swap_tx)
+            swap_tx = await w3.eth.send_raw_transaction(transaction=signed_tx.rawTransaction)
+            tx_rec = await w3.eth.wait_for_transaction_receipt(swap_tx)
 
             gas = get_gas()
             status = tx_rec['status']
-            fee = self.get_fee(
+            fee = await self.get_fee(
                 w3=w3,
                 gas_price=gas_price,
                 gas_used=tx_rec['gasUsed']
@@ -166,7 +164,7 @@ class SyncSwap(SimpleW3):
         assert status == 1  # если статус != 1 транзакция не прошла
 
     @retry
-    def add_liquidity(
+    async def add_liquidity(
             self,
             key: str,
             token1: str,
@@ -175,24 +173,23 @@ class SyncSwap(SimpleW3):
         """Функция добавления ликвидности для SyncSwap"""
 
         amount = None
-        w3 = self.connect()
+        w3 = await self.connect()
         token0 = self.to_address(gc.ETH)
         account = self.get_account(w3=w3, key=key)
         router = self.get_contract(w3=w3, address=cst.ROUTER, abi=ROUTER_ABI)
-        w3.middleware_onion.add(construct_sign_and_send_raw_middleware(account))
 
-        pool, token0, token1, pool_address, signer = self.preparing(
+        pool, token0, token1, pool_address, signer = await self.preparing(
             w3=w3,
             token0=token0,
             token1=token1,
             account=account
         )
 
-        pair_address = pool.functions.getPool(
+        pair_address = await pool.functions.getPool(
             self.to_address(gc.ETH),
             self.to_address(gc.USDC)
         ).call()
-        eth = self.get_eth(w3=w3, abi=POOL_ABI, pair_address=pair_address)
+        eth = await self.get_eth(w3=w3, abi=POOL_ABI, pair_address=pair_address)
 
         token_in = cst.TOKENS[token0.lower()]
         token_out = cst.TOKENS[token1.lower()]
@@ -201,18 +198,18 @@ class SyncSwap(SimpleW3):
             need_msg = True
 
             while not amount:
-                amount = self.get_amount(w3=w3, wallet=account.address, mode=mode, eth=eth)
+                amount = await self.get_amount(w3=w3, wallet=account.address, mode=mode, eth=eth)
 
                 if not amount:
                     if need_msg:
                         logger.error(f"Insufficient balance! Address - {account.address} key - {key}")
                         need_msg = False
-                    time.sleep(gc.TOP_UP_WAIT)
+                    await asyncio.sleep(gc.TOP_UP_WAIT)
 
         if token_in != 'ETH':
-            amount = self.get_usd_value(w3=w3, amount=amount, token_ch=token0)
+            amount = await self.get_usd_value(w3=w3, amount=amount, token_ch=token0)
 
-            self.approve(
+            await self.approve(
                 w3=w3,
                 token=token0,
                 signer=signer,
@@ -221,7 +218,7 @@ class SyncSwap(SimpleW3):
                 spender=cst.ROUTER
             )
 
-        liq_tx = self.create_liq_tx(
+        liq_tx = await self.create_liq_tx(
             pool=pool_address,
             token_in=token_in,
             router=router,
@@ -232,23 +229,23 @@ class SyncSwap(SimpleW3):
             w3=w3
         )
 
-        gas_price = w3.eth.gas_price
+        gas_price = await w3.eth.gas_price
         liq_tx['maxFeePerGas'] = int(gas_price * 1.1)
         liq_tx['maxPriorityFeePerGas'] = gas_price
-        liq_tx['gas'] = w3.eth.estimate_gas(liq_tx)
+        liq_tx['gas'] = await w3.eth.estimate_gas(liq_tx)
 
         signed_tx = account.sign_transaction(transaction_dict=liq_tx)
         logger.info("Liquidity transaction signed. Wait 20 sec.")
-        time.sleep(20)
+        await asyncio.sleep(20)
 
         status = 0
 
         try:
-            liq_tx = w3.eth.send_raw_transaction(transaction=signed_tx.rawTransaction)
-            tx_rec = w3.eth.wait_for_transaction_receipt(liq_tx)
+            liq_tx = await w3.eth.send_raw_transaction(transaction=signed_tx.rawTransaction)
+            tx_rec = await w3.eth.wait_for_transaction_receipt(liq_tx)
             gas = get_gas()
             status = tx_rec['status']
-            fee = self.get_fee(
+            fee = await self.get_fee(
                 w3=w3,
                 gas_price=gas_price,
                 gas_used=tx_rec['gasUsed']
@@ -264,7 +261,7 @@ class SyncSwap(SimpleW3):
 
         assert status == 1  # если статус != 1 транзакция не прошла
 
-    def preparing(self, w3: Web3, token0: str, token1: str, account: LocalAccount) -> [
+    async def preparing(self, w3: AsyncWeb3, token0: str, token1: str, account: LocalAccount) -> [
         web3.contract.Contract,
         LocalAccount,
         ChecksumAddress,
@@ -278,20 +275,20 @@ class SyncSwap(SimpleW3):
         token1 = self.to_address(token1)
 
         pool = self.get_contract(w3=w3, address=cst.FACTORY, abi=FACTORY_ABI)
-        pool_address = pool.functions.getPool(token0, token1).call()
+        pool_address = await pool.functions.getPool(token0, token1).call()
 
         return [pool, token0, token1, pool_address, account.address]
 
     @staticmethod
-    def create_liq_tx(
-            router: web3.contract.Contract,
+    async def create_liq_tx(
+            amount: int,
+            token_in: str,
+            w3: AsyncWeb3,
+            pool: ChecksumAddress,
             token0: ChecksumAddress,
             token1: ChecksumAddress,
             wallet: ChecksumAddress,
-            pool: ChecksumAddress,
-            token_in: str,
-            amount: int,
-            w3: Web3,
+            router: web3.contract.Contract,
     ) -> TxParams:
         """Функция создания транзакции добавления ликвидности"""
 
@@ -301,7 +298,7 @@ class SyncSwap(SimpleW3):
             (token0, amount)
         ]
 
-        txn = router.functions.addLiquidity2(
+        txn = await router.functions.addLiquidity2(
             pool,
             inputs,
             eth_abi.encode(['address'], [wallet]),
@@ -314,22 +311,22 @@ class SyncSwap(SimpleW3):
             'maxFeePerGas': 0,
             'maxPriorityFeePerGas': 0,
             'value': amount if token_in == 'ETH' else 0,
-            'nonce': w3.eth.get_transaction_count(wallet),
+            'nonce': await w3.eth.get_transaction_count(wallet),
         })
 
         return txn
 
-    def create_swap_tx(
+    async def create_swap_tx(
             self,
-            w3: Web3,
             paths: list,
             amount: int,
+            w3: AsyncWeb3,
             token_in: str,
             wallet: ChecksumAddress,
             router: web3.contract.Contract,
     ) -> TxParams:
 
-        txn = router.functions.swap(
+        txn = await router.functions.swap(
             paths,
             0,
             self.deadline(),
@@ -339,20 +336,20 @@ class SyncSwap(SimpleW3):
             'maxFeePerGas': 0,
             'maxPriorityFeePerGas': 0,
             'value': amount if token_in == 'ETH' else 0,
-            'nonce': w3.eth.get_transaction_count(wallet),
+            'nonce': await w3.eth.get_transaction_count(wallet),
         })
 
         return txn
 
-    def get_usd_value(
+    async def get_usd_value(
             self,
-            w3: Web3,
+            w3: AsyncWeb3,
             amount: float,
             token_ch: ChecksumAddress,
     ) -> int:
         """Функция получения курса в пуле"""
 
-        token0_res, token1_res, tkn0, decs0, decs1 = self.get_reserves(
+        token0_res, token1_res, tkn0, decs0, decs1 = await self.get_reserves(
             w3=w3,
             stable=False,  # parameter is unnecessary
             p_abi=POOL_ABI,
@@ -372,9 +369,9 @@ class SyncSwap(SimpleW3):
 
         return int(amount * usd * (10 ** decs0))
 
-    def get_fee(
+    async def get_fee(
             self,
-            w3: Web3,
+            w3: AsyncWeb3,
             gas_price: int,
             gas_used: float,
     ) -> float:
@@ -382,14 +379,14 @@ class SyncSwap(SimpleW3):
 
         amount = (gas_used * gas_price) / 10 ** 18
         token1 = self.to_address(gc.USDC)
-        fee = self.get_usd_value(w3=w3, amount=amount, token_ch=token1)
+        fee = await self.get_usd_value(w3=w3, amount=amount, token_ch=token1)
 
         return round((fee / 10 ** 6), 2)
 
-    def approve(
+    async def approve(
             self,
-            w3: Web3,
             amount: int,
+            w3: AsyncWeb3,
             account: LocalAccount,
             token: ChecksumAddress,
             signer: ChecksumAddress,
@@ -398,7 +395,7 @@ class SyncSwap(SimpleW3):
         """Функция подтверждения использования средств"""
 
         try:
-            approved_tx = self.approve_swap(
+            approved_tx = await self.approve_swap(
                 w3=w3,
                 token=token,
                 amount=amount,
@@ -409,11 +406,11 @@ class SyncSwap(SimpleW3):
 
             if approved_tx:
                 gas = get_gas()
-                gas_price = w3.eth.gas_price
+                gas_price = await w3.eth.gas_price
 
-                tx_rec = w3.eth.wait_for_transaction_receipt(approved_tx)
+                tx_rec = await w3.eth.wait_for_transaction_receipt(approved_tx)
 
-                fee = self.get_fee(
+                fee = await self.get_fee(
                     w3=w3,
                     gas_price=gas_price,
                     gas_used=tx_rec['gasUsed']
@@ -426,17 +423,17 @@ class SyncSwap(SimpleW3):
                 )
                 logger.info('Wait 30 sec.')
 
-                time.sleep(30)
+                await asyncio.sleep(30)
             else:
                 logger.info("Doesn't need approve. Wait 5 sec.")
-                time.sleep(5)
+                await asyncio.sleep(5)
         except Exception as err:
             logger.error(f"\33[{31}m{err}\033[0m")
 
-    def get_price_impact(
+    async def get_price_impact(
             self,
-            w3: Web3,
             amount: int,
+            w3: AsyncWeb3,
             token0: ChecksumAddress,
             token1: ChecksumAddress,
             stable: bool = False,
@@ -447,7 +444,7 @@ class SyncSwap(SimpleW3):
         # stable pool k = x + y
 
         pool_name = f'{cst.TOKENS[token0.lower()]}/{cst.TOKENS[token1.lower()]}'
-        token0_res, token1_res, tkn0, decs0, decs1 = self.get_reserves(
+        token0_res, token1_res, tkn0, decs0, decs1 = await self.get_reserves(
             w3=w3,
             stable=stable,
             token0=token0,
@@ -461,13 +458,13 @@ class SyncSwap(SimpleW3):
         amount /= 10 ** decs0
 
         if tkn0.lower() == gc.ETH.lower():
-            liquidity = self.get_usd_value(
+            liquidity = await self.get_usd_value(
                 w3=w3,
                 amount=token0_res,
                 token_ch=self.to_address(gc.USDC)
             ) * 2 / 10 ** 6
         else:
-            liquidity = self.get_usd_value(
+            liquidity = await self.get_usd_value(
                 w3=w3,
                 amount=token1_res,
                 token_ch=self.to_address(gc.USDC)

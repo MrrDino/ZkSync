@@ -1,19 +1,21 @@
 import os
 import sys
-import time
 import web3
 import json
+import time
 import random
-import requests
+import aiohttp
+import asyncio
 import functools
 
 import global_constants as cst
 
 from web3 import Web3
 from loguru import logger
+from web3.eth import AsyncEth
 from hexbytes.main import HexBytes
 from web3.types import ChecksumAddress
-from requests.adapters import HTTPAdapter, Retry
+from web3 import AsyncHTTPProvider, AsyncWeb3
 from eth_account.signers.local import LocalAccount
 
 from general_abis.erc20 import ERC20_ABI
@@ -73,28 +75,6 @@ def get_txt_info(filename: str) -> list:
     return keys
 
 
-def pre_check() -> [bool, list, list]:
-    """Функция предварительной проверки"""
-
-    check = False
-    keys = get_txt_info(filename='keys.txt')
-    proxies = get_txt_info(filename='proxies.txt')
-
-    proxy_check = check_proxies(proxies=proxies, keys=keys)
-    gas_check = check_gas()
-
-    if all([proxy_check, gas_check]):
-        check = True
-
-    return [check, keys, proxies]
-
-
-def check_connection(w3: Web3) -> bool:
-    """Функция проверки соединения"""
-
-    return w3.is_connected()
-
-
 class SimpleW3:
 
     def __init__(self, proxies: list):
@@ -103,23 +83,25 @@ class SimpleW3:
         self.node_url = cst.ZK_NODE
         self.proxies = proxies
 
-    def connect(self) -> Web3:
+    async def connect(self) -> AsyncWeb3:
         """Функция подключения к ноде"""
 
         conn = False
 
         while not conn:
             proxy = random.choice(self.proxies)
-            proxies = dict(http=proxy, https=proxy)
-            w3 = Web3(Web3.HTTPProvider(
-                endpoint_uri=self.node_url,
-                request_kwargs={'proxies': proxies}
-            ))
-            conn = w3.is_connected()
+            w3 = AsyncWeb3(
+                AsyncHTTPProvider(
+                    endpoint_uri='https://rpc.ankr.com/zksync_era',
+                    request_kwargs={'proxy': proxy}
+                ),
+                modules={'eth': (AsyncEth,)},
+            )
+            conn = await w3.is_connected()
 
         return w3
 
-    def get_contract(self, w3: web3.Web3, address: str, abi: list) -> web3.contract.Contract:
+    def get_contract(self, w3: AsyncWeb3, address: str, abi: list) -> web3.contract.Contract:
         """Функция получения пула"""
 
         address = self.to_address(address=address)
@@ -128,32 +110,17 @@ class SimpleW3:
         pool = w3.eth.contract(address=address, abi=abi)
         return pool
 
-    @staticmethod
-    def to_address(address: str) -> web3.main.ChecksumAddress or None:
-        """Функция преобразования адреса в правильный"""
-
-        try:
-            return web3.Web3.to_checksum_address(value=address)
-        except Exception:
-            logger.error(f"Invalid address convert {address}")
-
-    @staticmethod
-    def get_account(w3: Web3, key: str) -> LocalAccount:
-
-        account = w3.eth.account.from_key(key)
-        return account
-
-    def get_amount(
+    async def get_amount(
             self,
-            w3: Web3,
             mode: int,
             wallet: str,
+            w3: AsyncWeb3,
             eth: float = None
     ) -> int or None:
         """Функция проверки баланса"""
 
         wallet = self.to_address(address=wallet)
-        eth_balance = w3.eth.get_balance(wallet)
+        eth_balance = await w3.eth.get_balance(wallet)
         min_amount, max_amount = cst.AMOUNTS[mode]
 
         if mode == 1:
@@ -171,56 +138,25 @@ class SimpleW3:
         else:
             return random.randrange(min_amount, max_amount)
 
-    @staticmethod
-    def approve_swap(
-            sign_addr: ChecksumAddress,
-            spender: ChecksumAddress,
-            token: ChecksumAddress,
-            signer: LocalAccount,
-            amount: int,
-            w3: Web3
-    ) -> HexBytes:
-        """Функция утверждения использования средств"""
-
-        token_contract = w3.eth.contract(address=token, abi=ERC20_ABI)
-        allowance = token_contract.functions.allowance(sign_addr, spender).call()
-
-        if allowance < amount:
-            max_amount = Web3.to_wei(2 ** 64 - 1, 'ether')
-
-            transaction = token_contract.functions.approve(spender, max_amount).build_transaction({
-                'from': sign_addr,
-                'gas': 3_000_000,
-                'gasPrice': w3.eth.gas_price,
-                'nonce': w3.eth.get_transaction_count(sign_addr)
-            })
-
-            approve_tx = signer.sign_transaction(transaction)
-            time.sleep(30)
-
-            tx = w3.eth.send_raw_transaction(approve_tx.rawTransaction)
-
-            return tx
-
-    def get_decimals(self, w3: Web3, token: ChecksumAddress) -> int:
+    async def get_decimals(self, w3: AsyncWeb3, token: ChecksumAddress) -> int:
         """Функция получения количества цифр после запятой"""
 
         token_contract = self.get_contract(w3=w3, address=token, abi=ERC20_ABI)
-        decimals = token_contract.functions.decimals().call()
+        decimals = await token_contract.functions.decimals().call()
 
         return decimals
 
-    def get_eth(
+    async def get_eth(
             self,
-            w3: Web3,
             abi: list,
+            w3: AsyncWeb3,
             pair_address: ChecksumAddress
     ) -> float:
         """Функция перевода из центов в ETH"""
 
         pair = self.get_contract(w3=w3, address=pair_address, abi=abi)
-        reserves = pair.functions.getReserves().call()
-        tkn0 = pair.functions.token0().call()
+        reserves = await pair.functions.getReserves().call()
+        tkn0 = await pair.functions.token0().call()
 
         if cst.USDC.lower() == tkn0.lower():
             token0_res = reserves[0] / 10 ** cst.USDC_DECS
@@ -233,12 +169,12 @@ class SimpleW3:
 
         return eth
 
-    def check_amount(
+    async def check_amount(
             self,
-            w3: Web3,
             eth: int,
             f_abi: list,
             p_abi: list,
+            w3: AsyncWeb3,
             token: ChecksumAddress,
             wallet: ChecksumAddress,
             f_address: ChecksumAddress,
@@ -247,7 +183,7 @@ class SimpleW3:
     ) -> bool:
         """Функция проверки наличия суммы на балансе равносильной ETH"""
 
-        token0_res, token1_res, tkn0, decs0, decs1 = self.get_reserves(
+        token0_res, token1_res, tkn0, decs0, decs1 = await self.get_reserves(
             w3=w3,
             p_abi=p_abi,
             f_abi=f_abi,
@@ -259,7 +195,7 @@ class SimpleW3:
         )
 
         token_contract = self.get_contract(w3=w3, address=token, abi=ERC20_ABI)
-        balance = token_contract.functions.balanceOf(wallet).call() / 10 ** decs0
+        balance = await token_contract.functions.balanceOf(wallet).call() / 10 ** decs0
 
         token_balance = balance * (token1_res / token0_res)
 
@@ -268,12 +204,12 @@ class SimpleW3:
         else:
             return False
 
-    def get_reserves(
+    async def get_reserves(
             self,
-            w3: Web3,
             f_abi: list,
             p_abi: list,
             stable: bool,
+            w3: AsyncWeb3,
             token0: ChecksumAddress,
             token1: ChecksumAddress,
             f_address: ChecksumAddress,
@@ -284,18 +220,18 @@ class SimpleW3:
         factory = self.get_contract(w3=w3, address=f_address, abi=f_abi)
 
         if exchange == 'SyncSwap':
-            pool_address = factory.functions.getPool(token0, token1).call()
+            pool_address = await factory.functions.getPool(token0, token1).call()
         elif exchange == 'SpaceFi':
-            pool_address = factory.functions.getPair(token0, token1).call()
+            pool_address = await factory.functions.getPair(token0, token1).call()
         else:
-            pool_address = factory.functions.getPair(token0, token1, stable).call()
+            pool_address = await factory.functions.getPair(token0, token1, stable).call()
 
         pool = self.get_contract(w3=w3, address=pool_address, abi=p_abi)
-        reserves = pool.functions.getReserves().call()
+        reserves = await pool.functions.getReserves().call()
 
-        decs0 = self.get_decimals(w3=w3, token=token0)
-        decs1 = self.get_decimals(w3=w3, token=token1)
-        tkn0 = pool.functions.token0().call()
+        decs0 = await self.get_decimals(w3=w3, token=token0)
+        decs1 = await self.get_decimals(w3=w3, token=token1)
+        tkn0 = await pool.functions.token0().call()
 
         if token0.lower() == tkn0.lower():
             token0_res = reserves[0] / 10 ** decs0
@@ -306,59 +242,103 @@ class SimpleW3:
 
         return [token0_res, token1_res, tkn0, decs0, decs1]
 
-    @staticmethod
-    def deadline() -> int:
-        """Функция возвращения параметра deadline"""
-
-        return int(time.time()) + 600
-
-    def get_fee_by_url(self, gas_used: int, gas_price: int) -> float:
+    async def get_fee_by_url(self, gas_used: int, gas_price: int) -> float:
         """Функция получения комиссии транзакции в долларах"""
 
         price = None
         attempts = 5
         amount = (gas_used * gas_price) / 10 ** 18
 
-        client = requests.Session()
-        # proxy = random.choice(self.proxies)
-        # client.proxies = dict(http=proxy, https=proxy)  мои прокси не проходят
-        retries = Retry(
-            total=15,
-            backoff_factor=0.1,
-            status_forcelist=[500, 502, 503, 504]
-        )
+        async with aiohttp.ClientSession() as session:
 
-        client.mount('http://', HTTPAdapter(max_retries=retries))
+            while not price and attempts != 0:
+                try:
+                    response = await session.get(url=f"{self.url}{self.pool}")
+                    data = await response.json()
 
-        while not price and attempts != 0:
-            try:
-                response = client.get(url=f"{self.url}{self.pool}")
-
-                if response.status_code != 200:
-                    raise Exception
-
-                data = response.json()
-                price = float(data['pairs'][0]['priceUsd'])
-            except Exception as err:
-                logger.error(err)
-                attempts -= 1
-                time.sleep(2)
+                    price = float(data['pairs'][0]['priceUsd'])
+                except Exception as err:
+                    logger.error(err)
+                    attempts -= 1
+                    await asyncio.sleep(2)
 
         fee_price = amount * price
 
         return round(fee_price, 2)
 
+    @staticmethod
+    def to_address(address: str) -> web3.main.ChecksumAddress or None:
+        """Функция преобразования адреса в правильный"""
+
+        try:
+            return web3.Web3.to_checksum_address(value=address)
+        except Exception:
+            logger.error(f"Invalid address convert {address}")
+
+    @staticmethod
+    def get_account(w3: AsyncWeb3, key: str) -> LocalAccount:
+
+        account = w3.eth.account.from_key(key)
+        return account
+
+    @staticmethod
+    async def approve_swap(
+            sign_addr: ChecksumAddress,
+            spender: ChecksumAddress,
+            token: ChecksumAddress,
+            signer: LocalAccount,
+            w3: AsyncWeb3,
+            amount: int,
+    ) -> HexBytes:
+        """Функция утверждения использования средств"""
+
+        token_contract = w3.eth.contract(address=token, abi=ERC20_ABI)
+        allowance = await token_contract.functions.allowance(sign_addr, spender).call()
+
+        if allowance < amount:
+            max_amount = Web3.to_wei(2 ** 64 - 1, 'ether')
+
+            transaction = await token_contract.functions.approve(spender, max_amount).build_transaction({
+                'from': sign_addr,
+                'gas': 3_000_000,
+                'gasPrice': w3.eth.gas_price,
+                'nonce': w3.eth.get_transaction_count(sign_addr)
+            })
+
+            approve_tx = signer.sign_transaction(transaction)
+            await asyncio.sleep(30)
+
+            tx = await w3.eth.send_raw_transaction(approve_tx.rawTransaction)
+
+            return tx
+
+    @staticmethod
+    def deadline() -> int:
+        """Функция возвращения параметра deadline"""
+
+        return int(time.time()) + 600
+
 
 def retry(func):
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
+    async def wrapper(*args, **kwargs):
 
         while True:
             try:
-                return func(*args, **kwargs)
+                return await func(*args, **kwargs)
             except Exception as err:
                 logger.error(f"\33[{31}mRetry: {err}\033[0m")
-                time.sleep(25)
+                await asyncio.sleep(25)
 
     return wrapper
+
+
+def get_keys(items: list, n: int) -> list:
+    """Функция которая делит ключи на n списков"""
+
+    for i in range(0, len(items), n):
+        e_c = items[i: n + i]
+
+        yield e_c
+
