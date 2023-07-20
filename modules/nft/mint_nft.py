@@ -1,6 +1,8 @@
 import time
 import random
 
+import global_constants as gc
+
 from web3 import Web3
 from loguru import logger
 from eth_abi import encode
@@ -29,7 +31,7 @@ class Minter(SimpleW3):
 
         for i in range(0, len(numbers)):
 
-            if minted == 2:
+            if minted == gc.MAX_NFTS:
                 break
 
             number = random.choice(numbers)
@@ -77,8 +79,8 @@ class Minter(SimpleW3):
 
         try:
             signed_tx = account.sign_transaction(tx)
-            logger.info("Mint transaction signed. Wait 30 sec.")
-            time.sleep(30)
+            logger.info("Mint transaction signed. Wait 20 sec.")
+            time.sleep(20)
 
             mint_tx = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
             tx_rec = w3.eth.wait_for_transaction_receipt(mint_tx)
@@ -96,5 +98,4 @@ class Minter(SimpleW3):
             logger.error(f"\33[{31}m{err}\033[0m")
 
         assert status == 1  # если статус != 1 транзакция не прошла
-
         return True

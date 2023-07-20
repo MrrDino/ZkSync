@@ -146,8 +146,9 @@ class MuteIO(SimpleW3):
         swap_tx['gas'] = w3.eth.estimate_gas(swap_tx)
 
         signed_tx = account.sign_transaction(transaction_dict=swap_tx)
-        logger.info("Swap transaction signed. Wait 30 sec.")
-        time.sleep(30)
+        logger.info("Swap transaction signed. Wait 20 sec.")
+        time.sleep(20)
+
         status = 0
 
         try:
@@ -264,8 +265,9 @@ class MuteIO(SimpleW3):
         liq_tx['gas'] = w3.eth.estimate_gas(liq_tx)
 
         signed_tx = account.sign_transaction(transaction_dict=liq_tx)
-        logger.info("Liquidity transaction signed. Wait 30 sec.")
-        time.sleep(30)
+        logger.info("Liquidity transaction signed. Wait 20 sec.")
+        time.sleep(20)
+
         status = 0
 
         try:
@@ -289,6 +291,7 @@ class MuteIO(SimpleW3):
             logger.error(f"\33[{31}m{err}\033[0m")
 
         assert status == 1  # если статус != 1 транзакция не прошла
+        return True
 
     def approve(
             self,
@@ -334,8 +337,8 @@ class MuteIO(SimpleW3):
 
                 time.sleep(30)
             else:
-                logger.info("Doesn't need approve. Wait 10 sec.")
-                time.sleep(10)
+                logger.info("Doesn't need approve. Wait 5 sec.")
+                time.sleep(5)
         except Exception as err:
             logger.error(f"\33[{31}m{err}\033[0m")
 

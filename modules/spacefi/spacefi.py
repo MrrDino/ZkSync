@@ -154,8 +154,8 @@ class SpaceFi(SimpleW3):
         swap_tx['gas'] = w3.eth.estimate_gas(swap_tx)
 
         signed_tx = account.sign_transaction(transaction_dict=swap_tx)
-        logger.info("Swap transaction signed. Wait 15 sec.")
-        time.sleep(15)
+        logger.info("Swap transaction signed. Wait 20 sec.")
+        time.sleep(20)
 
         status = 0
 
@@ -217,7 +217,7 @@ class SpaceFi(SimpleW3):
 
                 if not amount:
                     if need_msg:
-                        logger.error(f"Insufficient balance! Address - {account.address}, key - {key}.")
+                        logger.error(f"Insufficient balance! Address - {account.address} key - {key}.")
                         need_msg = False
                     time.sleep(gc.TOP_UP_WAIT)
 
@@ -267,8 +267,8 @@ class SpaceFi(SimpleW3):
         liq_tx['gas'] = w3.eth.estimate_gas(liq_tx)
 
         signed_tx = account.sign_transaction(transaction_dict=liq_tx)
-        logger.info("Liquidity transaction signed. Wait 15 sec.")
-        time.sleep(15)
+        logger.info("Liquidity transaction signed. Wait 20 sec.")
+        time.sleep(20)
 
         status = 0
 
@@ -293,6 +293,7 @@ class SpaceFi(SimpleW3):
             logger.error(f"\33[{31}m{err}\033[0m")
 
         assert status == 1  # если статус != 1 транзакция не прошла
+        return True
 
     def approve(
             self,
@@ -331,7 +332,7 @@ class SpaceFi(SimpleW3):
                 tx_fee = f"tx fee ${fee}"
 
                 logger.info(
-                    f'||APPROVE| https://www.okx.com/explorer/zksync/tx/{approved_tx.hex()}. '
+                    f'||APPROVE| https://www.okx.com/explorer/zksync/tx/{approved_tx.hex()} '
                     f'Gas: {gas} gwei, \33[{36}m{tx_fee}\033[0m'
                 )
                 logger.info('Wait 30 sec.')

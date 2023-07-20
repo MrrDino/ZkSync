@@ -39,6 +39,7 @@ def start():
                 time.sleep(gc.TIMEOUT)
 
         exchange = gc.EXCHANGES[random.randint(0, 3)]  # В данный момент SpaceFi(№3) лагает
+        exchange = 'SyncSwap'
 
         if exchange == 'SyncSwap':
             swapper = SyncSwap(proxies=proxies)
@@ -74,11 +75,14 @@ def start():
             logger.info(f"Go to deposit liquidity. Wait {delay}")
             time.sleep(delay)
 
+            liq_tokens = gc.LIQ[exchange].copy()
+
             if exchange == 'SyncSwap':
+                token0 = random.choice(liq_tokens)
+
                 swapper.add_liquidity(token1=token0, key=key)
             else:
                 result = False
-                liq_tokens = gc.LIQ[exchange].copy()
 
                 while not result and len(liq_tokens) != 0:
 
@@ -97,6 +101,7 @@ def start():
 
         delay = random.randint(gc.DELAY4[0], gc.DELAY4[1])
         logger.info(f"Go to mint NFT. Wait {delay}")
+        time.sleep(delay)
 
         minter = Minter(proxies=proxies)
         minter.start_mint(key=key)

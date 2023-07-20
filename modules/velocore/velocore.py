@@ -142,8 +142,8 @@ class Velocore(SimpleW3):
         swap_tx['gas'] = w3.eth.estimate_gas(swap_tx)
 
         signed_tx = account.sign_transaction(transaction_dict=swap_tx)
-        logger.info("Swap transaction signed. Wait 30 sec.")
-        time.sleep(30)
+        logger.info("Swap transaction signed. Wait 20 sec.")
+        time.sleep(20)
 
         status = 0
 
@@ -170,7 +170,7 @@ class Velocore(SimpleW3):
         assert status == 1  # если статус != 1 транзакция не прошла
 
     @retry
-    def add_liquidity(self, token0: str, key: str, mode: int = 1):
+    def add_liquidity(self, token0: str, key: str, mode: int = 1) -> bool:
         """Функция добавления ликвидности для Sapce Finance"""
 
         amount = None
@@ -257,8 +257,9 @@ class Velocore(SimpleW3):
         liq_tx['gas'] = w3.eth.estimate_gas(liq_tx)
 
         signed_tx = account.sign_transaction(transaction_dict=liq_tx)
-        logger.info("Liquidity transaction signed. Wait 30 sec.")
-        time.sleep(30)
+        logger.info("Liquidity transaction signed. Wait 20 sec.")
+        time.sleep(20)
+
         status = 0
 
         try:
@@ -281,6 +282,7 @@ class Velocore(SimpleW3):
             logger.error(f"\33[{31}m{err}\033[0m")
 
         assert status == 1  # если статус != 1 транзакция не прошла
+        return True
 
     def approve(
             self,
@@ -324,8 +326,8 @@ class Velocore(SimpleW3):
 
                 time.sleep(30)
             else:
-                logger.info("Doesn't need approve. Wait 20 sec.")
-                time.sleep(20)
+                logger.info("Doesn't need approve. Wait 5 sec.")
+                time.sleep(5)
         except Exception as err:
             logger.error(f"\33[{31}m{err}\033[0m")
 

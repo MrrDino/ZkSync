@@ -138,8 +138,8 @@ class SyncSwap(SimpleW3):
         swap_tx['gas'] = w3.eth.estimate_gas(swap_tx)
 
         signed_tx = account.sign_transaction(transaction_dict=swap_tx)
-        logger.info("Swap transaction signed. Wait 30 sec.")
-        time.sleep(30)
+        logger.info("Swap transaction signed. Wait 20 sec.")
+        time.sleep(20)
 
         status = 0
 
@@ -238,8 +238,8 @@ class SyncSwap(SimpleW3):
         liq_tx['gas'] = w3.eth.estimate_gas(liq_tx)
 
         signed_tx = account.sign_transaction(transaction_dict=liq_tx)
-        logger.info("Liquidity transaction signed. Wait 30 sec.")
-        time.sleep(30)
+        logger.info("Liquidity transaction signed. Wait 20 sec.")
+        time.sleep(20)
 
         status = 0
 
@@ -424,12 +424,12 @@ class SyncSwap(SimpleW3):
                     f'||APPROVE| https://www.okx.com/explorer/zksync/tx/{approved_tx.hex()} '
                     f'Gas: {gas} gwei, \33[{36}m{tx_fee}\033[0m'
                 )
-                logger.info('Wait 50 sec.')
+                logger.info('Wait 30 sec.')
 
-                time.sleep(50)
+                time.sleep(30)
             else:
-                logger.info("Doesn't need approve. Wait 20 sec.")
-                time.sleep(20)
+                logger.info("Doesn't need approve. Wait 5 sec.")
+                time.sleep(5)
         except Exception as err:
             logger.error(f"\33[{31}m{err}\033[0m")
 
@@ -454,6 +454,7 @@ class SyncSwap(SimpleW3):
             token1=token1,
             p_abi=POOL_ABI,
             f_abi=FACTORY_ABI,
+            exchange='SyncSwap',
             f_address=cst.FACTORY
         )
 
