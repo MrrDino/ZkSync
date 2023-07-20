@@ -21,15 +21,14 @@ MAX_PRICE_IMPACT = .005
 
 # AMOUNTS IN ETH
 AMOUNTS = {
-    # 0: (.0040783968, .006646994),  # SWAP
-    0: (.0040783968, .0041783968),  # SWAP
+    0: (.0040783968, .006646994),  # SWAP
     1: (50, 250),  # LIQ in cents
     2: (.0040783968, .006046994)  # SHIT COINS
 }
 
 
 SWAP_BACK = True  # need to swap back tokens
-
+NEED_LIQ = True
 
 EXCHANGES = {
     0: 'Mute',

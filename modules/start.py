@@ -68,26 +68,27 @@ def start():
 
             swapper.start_swap(key=key, token0=token1, token1=token0, amount=amount)
 
-        delay = random.randint(gc.DELAY2[0], gc.DELAY2[1])
-        logger.info(f"Go to deposit liquidity. Wait {delay}")
-        time.sleep(delay)
+        if gc.NEED_LIQ:
 
-        if exchange == 'SyncSwap':
-            swapper.add_liquidity(token1=token0, key=key)
-        else:
-            result = False
-            liq_tokens = gc.LIQ[exchange].copy()
+            delay = random.randint(gc.DELAY2[0], gc.DELAY2[1])
+            logger.info(f"Go to deposit liquidity. Wait {delay}")
+            time.sleep(delay)
 
-            while not result and len(liq_tokens) != 0:
+            if exchange == 'SyncSwap':
+                swapper.add_liquidity(token1=token0, key=key)
+            else:
+                result = False
+                liq_tokens = gc.LIQ[exchange].copy()
 
-                token0 = random.choice(liq_tokens)
-                result = swapper.add_liquidity(token0=token0, key=key)
+                while not result and len(liq_tokens) != 0:
 
-                if not result:
-                    liq_tokens.remove(token0)
+                    token0 = random.choice(liq_tokens)
+                    result = swapper.add_liquidity(token0=token0, key=key)
+
+                    if not result:
+                        liq_tokens.remove(token0)
 
         delay = random.randint(gc.DELAY3[0], gc.DELAY3[1])
-
         shit_coin = random.choice(gc.SHIT_COINS)
         logger.info(f"Go to buy shit coin. Wait {delay}")
         time.sleep(delay)
