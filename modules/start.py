@@ -113,16 +113,18 @@ def starter():
             logger.info(f'Insufficient number of proxies. Wait {gc.TIMEOUT} sec.')
             time.sleep(gc.TIMEOUT)
 
-    keys_list = list(get_keys(items=keys, n=gc.DIVIDER))
-    ioloop = asyncio.get_event_loop()
     tasks = list()
+    keys_list = list(get_keys(items=keys, n=gc.DIVIDER))
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
     for key in keys_list:
-        tasks.append(ioloop.create_task(start(proxies, key)))
+        tasks.append(loop.create_task(start(proxies, key)))
 
     tasks_for_wait = asyncio.wait(tasks)
-    ioloop.run_until_complete(tasks_for_wait)
-    ioloop.close()
+    loop.run_until_complete(tasks_for_wait)
+    loop.close()
 
 
 if __name__ == '__main__':
