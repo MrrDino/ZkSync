@@ -301,10 +301,17 @@ class SimpleW3:
 
             transaction = await token_contract.functions.approve(spender, max_amount).build_transaction({
                 'from': sign_addr,
-                'gas': 3_000_000,
-                'gasPrice': await w3.eth.gas_price,
+                'gas': 0,
+                'maxFeePerGas': 0,
+                'maxPriorityFeePerGas': 0,
                 'nonce': await w3.eth.get_transaction_count(sign_addr)
             })
+
+            gas_price = await w3.eth.gas_price
+
+            transaction['maxFeePerGas'] = int(gas_price * 1.1)
+            transaction['maxPriorityFeePerGas'] = gas_price
+            transaction['gas'] = await w3.eth.estimate_gas(transaction)
 
             approve_tx = signer.sign_transaction(transaction)
             await asyncio.sleep(30)
