@@ -292,6 +292,7 @@ class SimpleW3:
     ) -> HexBytes:
         """Функция утверждения использования средств"""
 
+        amount = int(amount * 1.2)  # 120%
         token_contract = w3.eth.contract(address=token, abi=ERC20_ABI)
         allowance = await token_contract.functions.allowance(sign_addr, spender).call()
 

@@ -243,6 +243,7 @@ class SyncSwap(SimpleW3):
         try:
             liq_tx = await w3.eth.send_raw_transaction(transaction=signed_tx.rawTransaction)
             tx_rec = await w3.eth.wait_for_transaction_receipt(liq_tx)
+
             gas = get_gas()
             status = tx_rec['status']
             fee = await self.get_fee(
