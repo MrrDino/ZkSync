@@ -301,8 +301,8 @@ class SimpleW3:
             transaction = await token_contract.functions.approve(spender, max_amount).build_transaction({
                 'from': sign_addr,
                 'gas': 3_000_000,
-                'gasPrice': w3.eth.gas_price,
-                'nonce': w3.eth.get_transaction_count(sign_addr)
+                'gasPrice': await w3.eth.gas_price,
+                'nonce': await w3.eth.get_transaction_count(sign_addr)
             })
 
             approve_tx = signer.sign_transaction(transaction)
