@@ -297,7 +297,8 @@ class SimpleW3:
         allowance = await token_contract.functions.allowance(sign_addr, spender).call()
 
         if allowance < amount:
-            max_amount = Web3.to_wei(2 ** 64 - 1, 'ether')
+            # max_amount = Web3.to_wei(2 ** 64 - 1, 'ether')
+            max_amount = int(amount * 20)
 
             transaction = await token_contract.functions.approve(spender, max_amount).build_transaction({
                 'from': sign_addr,
@@ -349,4 +350,3 @@ def get_keys(items: list, n: int) -> list:
         e_c = items[i: n + i]
 
         yield e_c
-

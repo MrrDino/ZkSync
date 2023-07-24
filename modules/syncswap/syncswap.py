@@ -424,10 +424,10 @@ class SyncSwap(SimpleW3):
                 )
                 logger.info('Wait 30 sec.')
 
-                await asyncio.sleep(30)
+                await asyncio.sleep(40)
             else:
                 logger.info("Doesn't need approve. Wait 5 sec.")
-                await asyncio.sleep(5)
+                await asyncio.sleep(10)
         except Exception as err:
             logger.error(f"\33[{31}m{err}\033[0m")
 
