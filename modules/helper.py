@@ -1,4 +1,5 @@
 import os
+import csv
 import sys
 import web3
 import json
@@ -8,10 +9,13 @@ import aiohttp
 import asyncio
 import functools
 
+import settings as conf
 import global_constants as cst
 
+from tqdm import tqdm
 from web3 import Web3
 from loguru import logger
+from datetime import datetime
 from web3.eth import AsyncEth
 from hexbytes.main import HexBytes
 from web3.types import ChecksumAddress
@@ -42,7 +46,7 @@ def check_gas() -> bool:
 
     gas_price = get_gas()
 
-    if gas_price > cst.MAX_GAS:
+    if gas_price > conf.MAX_GAS:
         return False
 
     return True
@@ -121,7 +125,7 @@ class SimpleW3:
 
         wallet = self.to_address(address=wallet)
         eth_balance = await w3.eth.get_balance(wallet)
-        min_amount, max_amount = cst.AMOUNTS[mode]
+        min_amount, max_amount = conf.AMOUNTS[mode]
 
         if mode == 1:
             min_amount = int(min_amount / 100 * eth * 10 ** 18)
@@ -260,7 +264,7 @@ class SimpleW3:
                 except Exception as err:
                     logger.error(err)
                     attempts -= 1
-                    await asyncio.sleep(2)
+                    await wait(_time=2)
 
         fee_price = amount * price
 
@@ -315,7 +319,7 @@ class SimpleW3:
             transaction['gas'] = await w3.eth.estimate_gas(transaction)
 
             approve_tx = signer.sign_transaction(transaction)
-            await asyncio.sleep(30)
+            await wait(_time=30)
 
             tx = await w3.eth.send_raw_transaction(approve_tx.rawTransaction)
 
@@ -338,7 +342,7 @@ def retry(func):
                 return await func(*args, **kwargs)
             except Exception as err:
                 logger.error(f"\33[{31}mRetry: {err}\033[0m")
-                await asyncio.sleep(25)
+                await wait(_time=25)
 
     return wrapper
 
@@ -350,3 +354,47 @@ def get_keys(items: list, n: int) -> list:
         e_c = items[i: n + i]
 
         yield e_c
+
+
+def get_exchange() -> str:
+    """Функция получения биржи"""
+
+    choices = list([exchange for exchange in cst.EXCHANGES if conf.EXCHANGES_STATUS[exchange]])
+    return random.choice(choices)
+
+
+async def wait(_time: int):
+    """Функция ожидания с прогрес баром"""
+
+    for i in tqdm(range(_time), ncols=100, ascii=True, desc=f'Wait {_time} sec', colour='CYAN'):
+        await asyncio.sleep(1)
+
+
+def wait_sync(_time: int):
+    """Функция ожидания с прогрес баром"""
+
+    for i in tqdm(range(_time), ncols=100, ascii=True, desc=f'Wait {_time} sec', colour='CYAN'):
+        asyncio.sleep(1)
+
+
+def write_file(wallet: str, tx: str, action: int, status: int):
+    """Фукнция записи данных в CSV файл"""
+
+    file_name = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        'configs',
+        'results.csv'
+    )
+
+    data = [{
+        "Wallet": wallet,
+        "Time": datetime.now().strftime('%Y-%m-%d %H:%M'),
+        "Tx": tx,
+        "Action": cst.ACTIONS[action],
+        "Status": "SUCCESS" if status == 1 else "FAILURE"
+    }]
+
+    with open(file_name, 'a', newline='') as file:
+        writer = csv.DictWriter(file, cst.CSV_COLUMNS)
+        writer.writerows(data)
+        file.close()

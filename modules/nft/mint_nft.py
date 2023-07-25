@@ -1,7 +1,6 @@
 import random
-import asyncio
 
-import global_constants as gc
+import settings as conf
 
 from loguru import logger
 from eth_abi import encode
@@ -11,7 +10,7 @@ from web3.exceptions import ContractLogicError
 from eth_account.signers.local import LocalAccount
 
 from . import constants as cst
-from helper import SimpleW3, retry, get_gas
+from helper import SimpleW3, retry, get_gas, wait, write_file
 
 
 class Minter(SimpleW3):
@@ -28,7 +27,7 @@ class Minter(SimpleW3):
 
         for i in range(0, len(numbers)):
 
-            if minted == gc.MAX_NFTS:
+            if minted == conf.MAX_NFTS:
                 break
 
             number = random.choice(numbers)
@@ -38,8 +37,7 @@ class Minter(SimpleW3):
 
             if result:
                 minted += 1
-                logger.info("Wait 29 sec")
-                await asyncio.sleep(20)
+                await wait(_time=20)
         logger.info(
             f"Account \33[{35}m{account.address}\033[0m mint \33[{36}m{minted}\033[0m NFTs"
         )
@@ -77,8 +75,8 @@ class Minter(SimpleW3):
 
         try:
             signed_tx = account.sign_transaction(tx)
-            logger.info("Mint transaction signed. Wait 20 sec.")
-            await asyncio.sleep(20)
+            logger.info("Mint transaction signed.")
+            await wait(_time=20)
 
             mint_tx = await w3.eth.send_raw_transaction(signed_tx.rawTransaction)
             tx_rec = await w3.eth.wait_for_transaction_receipt(mint_tx)
@@ -87,9 +85,11 @@ class Minter(SimpleW3):
             status = tx_rec['status']
             fee = await self.get_fee_by_url(gas_price=gas_price, gas_used=tx_rec['gasUsed'])
             tx_fee = f"tx fee ${fee}"
+            link = f"https://www.okx.com/explorer/zksync/tx/{mint_tx.hex()}"
+            write_file(wallet=signer, tx=link, action=2, status=status)
 
             logger.info(
-                f'||MINT NFT| https://www.okx.com/explorer/zksync/tx/{mint_tx.hex()} '
+                f'||MINT NFT| {link} '
                 f'Gas: {gas} gwei, \33[{36}m{tx_fee}\033[0m'
             )
         except Exception as err:

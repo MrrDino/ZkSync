@@ -1,6 +1,6 @@
 import web3
-import asyncio
 
+import settings as conf
 import global_constants as gc
 
 from loguru import logger
@@ -12,7 +12,7 @@ from . import constants as cst
 from .abis.pair import PAIR_ABI
 from .abis.router import ROUTER_ABI
 from .abis.factory import FACTORY_ABI
-from helper import SimpleW3, retry, get_gas
+from helper import SimpleW3, retry, get_gas, wait, write_file
 
 
 class Velocore(SimpleW3):
@@ -30,9 +30,10 @@ class Velocore(SimpleW3):
     ) -> int or bool:
         """Функция запуска tokens swap для Velocore"""
 
+        print(4)
         w3 = await self.connect()
         account = self.get_account(w3=w3, key=key)
-
+        print(5)
         if pub_key:
             logger.info(f"Work with \33[{35}m{account.address}\033[0m Exchange: \33[{36}m{exchange}\033[0m")
 
@@ -46,7 +47,7 @@ class Velocore(SimpleW3):
                     if need_msg:
                         logger.error(f"Insufficient balance! Address - {account.address} key - {key}")
                         need_msg = False
-                    await asyncio.sleep(gc.TOP_UP_WAIT)
+                    await wait(_time=conf.TOP_UP_WAIT)
 
             router = self.get_contract(w3=w3, address=cst.ROUTER, abi=ROUTER_ABI)
 
@@ -140,8 +141,8 @@ class Velocore(SimpleW3):
         swap_tx['gas'] = await w3.eth.estimate_gas(swap_tx)
 
         signed_tx = account.sign_transaction(transaction_dict=swap_tx)
-        logger.info("Swap transaction signed. Wait 20 sec.")
-        await asyncio.sleep(20)
+        logger.info("Swap transaction signed.")
+        await wait(_time=20)
 
         status = 0
 
@@ -157,9 +158,11 @@ class Velocore(SimpleW3):
                 router=router
             )
             tx_fee = f"tx fee ${fee}"
+            link = f"https://www.okx.com/explorer/zksync/tx/{swap_tx.hex()}"
+            write_file(wallet=signer, tx=link, action=0, status=status)
 
             logger.info(
-                f'||SWAP to {token_out}| https://www.okx.com/explorer/zksync/tx/{swap_tx.hex()} '
+                f'||SWAP to {token_out}| {link} '
                 f'Gas: {gas} gwei, \33[{36}m{tx_fee}\033[0m'
             )
         except Exception as err:
@@ -205,7 +208,7 @@ class Velocore(SimpleW3):
                     if need_msg:
                         logger.error(f"Insufficient balance! Address - {account.address} key - {key}")
                         need_msg = False
-                    await asyncio.sleep(gc.TOP_UP_WAIT)
+                    await wait(_time=conf.TOP_UP_WAIT)
 
         balance_check = await self.check_amount(
             w3=w3,
@@ -254,8 +257,8 @@ class Velocore(SimpleW3):
         liq_tx['gas'] = await w3.eth.estimate_gas(liq_tx)
 
         signed_tx = account.sign_transaction(transaction_dict=liq_tx)
-        logger.info("Liquidity transaction signed. Wait 20 sec.")
-        await asyncio.sleep(20)
+        logger.info("Liquidity transaction signed.")
+        await wait(_time=20)
 
         status = 0
 
@@ -270,9 +273,11 @@ class Velocore(SimpleW3):
                 router=router
             )
             tx_fee = f"tx fee ${fee}"
+            link = f"https://www.okx.com/explorer/zksync/tx/{liq_tx.hex()}"
+            write_file(wallet=signer, tx=link, action=2, status=status)
 
             logger.info(
-                f'||ADD LIQ {token_in}/{token_out}| https://www.okx.com/explorer/zksync/tx/{liq_tx.hex()} '
+                f'||ADD LIQ {token_in}/{token_out}| {liq_tx} '
                 f'Gas: {gas} gwei, \33[{36}m{tx_fee}\033[0m'
             )
         except Exception as err:
@@ -319,12 +324,11 @@ class Velocore(SimpleW3):
                     f'||APPROVE| https://www.okx.com/explorer/zksync/tx/{approved_tx.hex()} '
                     f'Gas: {gas} gwei, \33[{36}m{tx_fee}\033[0m'
                 )
-                logger.info('Wait 30 sec.')
 
-                await asyncio.sleep(30)
+                await wait(_time=30)
             else:
-                logger.info("Doesn't need approve. Wait 5 sec.")
-                await asyncio.sleep(5)
+                logger.info("Doesn't need approve.")
+                await wait(_time=5)
         except Exception as err:
             logger.error(f"\33[{31}m{err}\033[0m")
 
@@ -421,7 +425,7 @@ class Velocore(SimpleW3):
                 router=router
             ) * 2 / 10 ** 6
 
-        if liquidity < gc.MIN_LIQUIDITY:
+        if liquidity < conf.MIN_LIQUIDITY:
             logger.info(f"Pool \33[{35}m{pool_name}\033[0m low liquidity - {round(liquidity, 2)}$")
             return False
 
@@ -435,7 +439,7 @@ class Velocore(SimpleW3):
 
         price_impact = new_price * 100 / old_price - 100
 
-        if price_impact > gc.MAX_PRICE_IMPACT:
+        if price_impact > conf.MAX_PRICE_IMPACT:
             logger.info(
                 f"Pool \33[{35}m{pool_name}\033[0m high price impact - {round(price_impact, 5)}%"
             )

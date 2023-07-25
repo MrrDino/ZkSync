@@ -1,58 +1,18 @@
-ETH_NODE = 'https://rpc.ankr.com/eth'
-ZK_NODE = 'https://rpc.ankr.com/zksync_era'
+# Основные константы
+ETH_NODE = 'https://rpc.ankr.com/eth'  # адрес ноды в сети Ethereum
+ZK_NODE = 'https://rpc.ankr.com/zksync_era'  # адрес ноды в сети ZkSync
+
+USDC = '0x3355df6d4c9c3035724fd0e3914de96a5a83aaf4'  # адрес USDC в сети ZkSync
+ETH = '0x5aea5775959fbc2557cc8789bc1bf90a239d9a91'  # адрес ETH в сети ZkSync
+
+USDC_DECS = 6  # кол-во десятков при переводе в USDC
+ETH_DECS = 18  # кол-во десятков при переводе в ETH
 
 
-USDC = '0x3355df6d4c9c3035724fd0e3914de96a5a83aaf4'
-ETH = '0x5aea5775959fbc2557cc8789bc1bf90a239d9a91'
+# Обмен токенов
 
-
-DIVIDER = 10  # keys quantity in 1 task
-
-USDC_DECS = 6
-ETH_DECS = 18
-
-MAX_GAS = 100
-
-
-TIMEOUT = 10
-
-
-# NFT
-MAX_NFTS = 2
-
-# LIQUIDITY POOLS
-MIN_LIQUIDITY = 1_000_000
-MAX_PRICE_IMPACT = .005
-
-
-# AMOUNTS IN ETH
-AMOUNTS = {
-    0: (.0040783968, .006646994),  # SWAP
-    1: (50, 250),  # LIQ in cents
-    2: (.0040783968, .006046994)  # SHIT COINS
-}
-
-
-SWAP_BACK = True  # need to swap back tokens
-NEED_LIQ = True
-
-EXCHANGES = {
-    0: 'Mute',
-    1: 'Velocore',
-    2: 'SyncSwap',
-    3: 'SpaceFi'
-}
-
-
-TOP_UP_WAIT = 10  # waiting for a wallet refill
-
-DELAY1 = (10, 60)  # timeout between swaps
-DELAY2 = (10, 60)  # timeout between swap & liquidity
-DELAY3 = (10, 60)  # timeout between liquidity & shit coin
-DELAY4 = (10, 60)  # timeout between shitcoins buy and mint
-DELAY5 = (10, 60)  # timeout between change wallets
-
-
+# Список бирж, с которыми работает код
+EXCHANGES = ['Mute', 'Velocore', 'SyncSwap', 'SpaceFi']
 SWAP = {
     'Mute': [
         '0x3355df6d4c9c3035724fd0e3914de96a5a83aaf4',  # USDC
@@ -83,6 +43,8 @@ SWAP = {
     ]
 }
 
+
+# Добавление ликвидности
 LIQ = {
     'Mute': [
         '0x0e97c7a0f8b2c9885c8ac9fc6136e829cbc21d42',  # MUTE
@@ -105,15 +67,27 @@ LIQ = {
     ]
 }
 
+
+# Покупка шиткоинов
 SHIT_COINS = [
-    '0xbbd1ba24d589c319c86519646817f2f153c9b716',  # Rhino.fi -> SyncSwap, SpaceFi
-    '0x0e97c7a0f8b2c9885c8ac9fc6136e829cbc21d42',  # MUTE -> SyncSwap, SpaceFi, Mute
-    '0xd0ea21ba66b67be636de1ec4bd9696eb8c61e9aa',  # Onchain Trade -> SyncSwap, SpaceFi
-    '0xfd282f16a64c6d304ac05d1a58da15bed0467c71',  # PEPE -> SyncSwap, SpaceFi
-    '0x47260090cE5e83454d5f05A0AbbB2C953835f777',  # SPACE -> SyncSwap, SpaceFi
-    '0x85d84c774cf8e9ff85342684b0e795df72a24908',  # Velocore -> SyncSwap, SpaceFi, Velocore
-    '0xbbeb516fb02a01611cbbe0453fe3c580d7281011',  # Wrapped BTC -> SyncSwap, SpaceFi, Mute, Velocore
-    '0x47ef4a5641992a72cfd57b9406c9d9cefee8e0c4',  # zkApes Token -> SyncSwap, SpaceFi
-    '0xb54aae4a0743aeec1d584f2b2abc1ebdc12f1b0f',  # frx ETH -> SyncSwap, SpaceFi
-    # '0x6068ad384b4d330d4de77f47041885956c9f32a3',  # Array -> SpaceFi
+    '0xbbd1ba24d589c319c86519646817f2f153c9b716',  # Rhino.fi
+    '0x0e97c7a0f8b2c9885c8ac9fc6136e829cbc21d42',  # MUTE
+    '0xd0ea21ba66b67be636de1ec4bd9696eb8c61e9aa',  # Onchain Trade
+    '0xfd282f16a64c6d304ac05d1a58da15bed0467c71',  # PEPE
+    '0x47260090cE5e83454d5f05A0AbbB2C953835f777',  # SPACE
+    '0x85d84c774cf8e9ff85342684b0e795df72a24908',  # Velocore
+    '0xbbeb516fb02a01611cbbe0453fe3c580d7281011',  # Wrapped BTC
+    '0x47ef4a5641992a72cfd57b9406c9d9cefee8e0c4',  # zkApes Token
+    '0xb54aae4a0743aeec1d584f2b2abc1ebdc12f1b0f',  # frx ETH
 ]
+
+# ключи для записи в файл результатов
+ACTIONS = {
+    0: "Swap",
+    1: "Add liquidity",
+    2: "Mint NFT",
+    3: "Buy shitcoin"
+}
+
+# Названия столбцов файла с результатами
+CSV_COLUMNS = ['Wallet', 'Time', "Tx", "Action", "Status"]
