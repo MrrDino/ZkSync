@@ -18,7 +18,7 @@ from helper import SimpleW3, retry, get_gas, wait, write_file
 
 class SyncSwap(SimpleW3):
 
-    # @retry
+    @retry
     async def start_swap(
             self,
             key: str,
