@@ -226,7 +226,7 @@ class SimpleW3:
 
         if exchange == 'SyncSwap':
             pool_address = await factory.functions.getPool(token0, token1).call()
-        elif exchange == 'SpaceFi' or 'Pancake':
+        elif (exchange == 'SpaceFi') or (exchange == 'Pancake'):
             pool_address = await factory.functions.getPair(token0, token1).call()
         else:
             pool_address = await factory.functions.getPair(token0, token1, stable).call()
@@ -374,7 +374,7 @@ async def wait(_time: int):
             bar_format="{l_bar}{bar}|",
             file=sys.stdout,
             colour='GREEN',
-            desc='Wait'
+            desc=f'Wait {_time} sec'
     ):
         await asyncio.sleep(1)
 
@@ -389,7 +389,7 @@ def wait_sync(_time: int):
             bar_format="{l_bar}{bar}|",
             file=sys.stdout,
             colour='GREEN',
-            desc='Wait'
+            desc=f'Wait {_time} sec'
     ):
         asyncio.sleep(1)
 

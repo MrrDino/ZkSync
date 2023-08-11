@@ -30,10 +30,9 @@ class Velocore(SimpleW3):
     ) -> int or bool:
         """Функция запуска tokens swap для Velocore"""
 
-        print(4)
         w3 = await self.connect()
         account = self.get_account(w3=w3, key=key)
-        print(5)
+
         if pub_key:
             logger.info(f"Work with \33[{35}m{account.address}\033[0m Exchange: \33[{36}m{exchange}\033[0m")
 
