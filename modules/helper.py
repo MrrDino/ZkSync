@@ -125,6 +125,7 @@ class SimpleW3:
 
         wallet = self.to_address(address=wallet)
         eth_balance = await w3.eth.get_balance(wallet)
+
         min_amount, max_amount = conf.AMOUNTS[mode]
 
         if mode == 1:
@@ -225,7 +226,7 @@ class SimpleW3:
 
         if exchange == 'SyncSwap':
             pool_address = await factory.functions.getPool(token0, token1).call()
-        elif exchange == 'SpaceFi':
+        elif exchange == 'SpaceFi' or 'Pancake':
             pool_address = await factory.functions.getPair(token0, token1).call()
         else:
             pool_address = await factory.functions.getPair(token0, token1, stable).call()
@@ -366,14 +367,30 @@ def get_exchange() -> str:
 async def wait(_time: int):
     """Функция ожидания с прогрес баром"""
 
-    for i in tqdm(range(_time), ncols=100, ascii=True, desc=f'Wait {_time} sec', colour='CYAN'):
+    for i in tqdm(
+            range(_time),
+            ncols=100,
+            ascii=" ▖▘▝▗▚▞█",
+            bar_format="{l_bar}{bar}|",
+            file=sys.stdout,
+            colour='GREEN',
+            desc='Wait'
+    ):
         await asyncio.sleep(1)
 
 
 def wait_sync(_time: int):
     """Функция ожидания с прогрес баром"""
 
-    for i in tqdm(range(_time), ncols=100, ascii=True, desc=f'Wait {_time} sec', colour='CYAN'):
+    for i in tqdm(
+            range(_time),
+            ncols=100,
+            ascii=" ▖▘▝▗▚▞█",
+            bar_format="{l_bar}{bar}|",
+            file=sys.stdout,
+            colour='GREEN',
+            desc='Wait'
+    ):
         asyncio.sleep(1)
 
 

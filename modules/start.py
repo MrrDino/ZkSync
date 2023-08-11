@@ -1,3 +1,4 @@
+import time
 import random
 import asyncio
 
@@ -5,14 +6,19 @@ import settings as conf
 import global_constants as gc
 
 from loguru import logger
+from threading import Semaphore, Thread
 
 from mute.mute import MuteIO
 from nft.mint_nft import Minter
 from spacefi.spacefi import SpaceFi
 from velocore.velocore import Velocore
 from syncswap.syncswap import SyncSwap
+from pancakeswap.pancake import PancakeSwap
 from shitcoins.shit_coins import buy_shitcoin
 from helper import get_txt_info, check_gas, check_proxies, get_keys, get_exchange, wait, wait_sync
+
+
+s = Semaphore(conf.STREAMS)
 
 
 async def start(proxies: list, keys: list):
@@ -35,6 +41,8 @@ async def start(proxies: list, keys: list):
             swapper = SpaceFi(proxies=proxies)
         elif exchange == 'Velocore':
             swapper = Velocore(proxies=proxies)
+        elif exchange == 'Pancake':
+            swapper = PancakeSwap(proxies=proxies)
         else:
             swapper = MuteIO(proxies=proxies)
 
@@ -102,6 +110,40 @@ async def start(proxies: list, keys: list):
         await wait(_time=delay)
 
 
+# def starter():
+#
+#     check_proxy = False
+#
+#     while not check_proxy:
+#         keys = get_txt_info('keys.txt')
+#         proxies = get_txt_info('proxies.txt')
+#         check_proxy = check_proxies(proxies=proxies, keys=keys)
+#
+#         if not check_proxy:
+#             logger.info(f'Insufficient number of proxies.')
+#             wait_sync(_time=conf.TIMEOUT)
+#
+#     tasks = list()
+#     keys_list = list(get_keys(items=keys, n=conf.DIVIDER))
+#     loop = asyncio.new_event_loop()
+#     asyncio.set_event_loop(loop)
+#
+#     for key in keys_list:
+#         random.shuffle(key)
+#         tasks.append(loop.create_task(start(proxies, key)))
+#
+#     tasks_for_wait = asyncio.wait(tasks)
+#     loop.run_until_complete(tasks_for_wait)
+#     loop.close()
+
+def start_thread(keys: list, proxies: list):
+
+    s.acquire()
+    asyncio.run(start(proxies=proxies, keys=keys))
+    time.sleep(2)
+    s.release()
+
+
 def starter():
 
     check_proxy = False
@@ -115,19 +157,14 @@ def starter():
             logger.info(f'Insufficient number of proxies.')
             wait_sync(_time=conf.TIMEOUT)
 
-    tasks = list()
-    keys_list = list(get_keys(items=keys, n=conf.DIVIDER))
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    keys_list = list(get_keys(items=keys, n=conf.STREAMS))
+    threads = [Thread(target=start_thread, args=(ks, proxies)) for ks in keys_list]
 
-    for key in keys_list:
-        random.shuffle(key)
-        tasks.append(loop.create_task(start(proxies, key)))
+    for t in threads:
+        t.start()
 
-    tasks_for_wait = asyncio.wait(tasks)
-    loop.run_until_complete(tasks_for_wait)
-    loop.close()
-
+    for t in threads:
+        t.join()
 
 if __name__ == '__main__':
     starter()

@@ -12,7 +12,8 @@ ETH_DECS = 18  # кол-во десятков при переводе в ETH
 # Обмен токенов
 
 # Список бирж, с которыми работает код
-EXCHANGES = ['Mute', 'Velocore', 'SyncSwap', 'SpaceFi']
+EXCHANGES = ['Mute', 'Velocore', 'SyncSwap', 'SpaceFi', 'Pancake']
+
 SWAP = {
     'Mute': [
         '0x3355df6d4c9c3035724fd0e3914de96a5a83aaf4',  # USDC
@@ -40,6 +41,11 @@ SWAP = {
         '0x503234F203fC7Eb888EEC8513210612a43Cf6115',  # LUSD,
         '0x8e86e46278518efc1c5ced245cba2c7e3ef11557',  # USD+,
         '0xb4c1544cb4163f4c2eca1ae9ce999f63892d912a',  # FRAX,
+    ],
+    'Pancake': [
+        '0x3355df6D4c9C3035724Fd0e3914dE96A5a83aaf4',  # USDC
+        '0x493257fD37EDB34451f62EDf8D2a0C418852bA4C',  # USDT
+        '0x2039bb4116B4EFc145Ec4f0e2eA75012D6C0f181',  # BUSD,
     ]
 }
 
@@ -63,6 +69,10 @@ LIQ = {
     'SpaceFi': [
         '0x0e97c7a0f8b2c9885c8ac9fc6136e829cbc21d42',  # MUTE
         '0x3355df6d4c9c3035724fd0e3914de96a5a83aaf4',  # USDC
+        '0x493257fD37EDB34451f62EDf8D2a0C418852bA4C',  # USDT
+    ],
+    'Pancake': [
+        '0x3355df6D4c9C3035724Fd0e3914dE96A5a83aaf4',  # USDC
         '0x493257fD37EDB34451f62EDf8D2a0C418852bA4C',  # USDT
     ]
 }
