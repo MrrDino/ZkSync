@@ -2,19 +2,20 @@ import web3
 import random
 import aiohttp
 
+import settings as conf
+import global_constants as gc
+
 from loguru import logger
 from web3 import AsyncWeb3
 from web3.types import ChecksumAddress
 from eth_account.signers.local import LocalAccount
 
-from modules import settings as conf
-from modules import global_constants as gc
-from modules.general_abis.erc20 import ERC20_ABI
-from modules.pancakeswap import constants as cst
-from modules.pancakeswap.abis.pair import PAIR_ABI
-from modules.pancakeswap.abis.router import ROUTER_ABI
-from modules.pancakeswap.abis.manager import MANAGER_ABI
-from modules.helper import SimpleW3, retry, get_gas, wait, write_file
+from general_abis.erc20 import ERC20_ABI
+from pancakeswap import constants as cst
+from pancakeswap.abis.pair import PAIR_ABI
+from pancakeswap.abis.router import ROUTER_ABI
+from pancakeswap.abis.manager import MANAGER_ABI
+from helper import SimpleW3, retry, get_gas, wait, write_file
 
 
 class PancakeSwap(SimpleW3):

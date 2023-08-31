@@ -1,18 +1,19 @@
 import web3
 import random
 
+import settings as conf
+import global_constants as gc
+
 from loguru import logger
 from web3 import AsyncWeb3
 from web3.types import ChecksumAddress
 from eth_account.signers.local import LocalAccount
 
-from modules import settings as conf
-from modules import global_constants as gc
-from modules.spacefi import constants as cst
-from modules.spacefi.abis.pair import PAIR_ABI
-from modules.spacefi.abis.router import ROUTER_ABI
-from modules.spacefi.abis.factory import FACTORY_ABI
-from modules.helper import SimpleW3, retry, get_gas, wait, write_file
+from spacefi import constants as cst
+from spacefi.abis.pair import PAIR_ABI
+from spacefi.abis.router import ROUTER_ABI
+from spacefi.abis.factory import FACTORY_ABI
+from helper import SimpleW3, retry, get_gas, wait, write_file
 
 
 class SpaceFi(SimpleW3):

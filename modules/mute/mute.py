@@ -1,18 +1,19 @@
 import web3
 import random
 
+import settings as conf
+import global_constants as gc
+
 from loguru import logger
 from web3 import AsyncWeb3
 from web3.types import ChecksumAddress
 from eth_account.signers.local import LocalAccount
 
-from modules import settings as conf
-from modules.mute import constants as cst
-from modules import global_constants as gc
-from modules.mute.abis.pair import PAIR_ABI
-from modules.mute.abis.router import ROUTER_ABI
-from modules.mute.abis.factory import FACTORY_ABI
-from modules.helper import SimpleW3, retry, get_gas, wait, write_file
+from mute import constants as cst
+from mute.abis.pair import PAIR_ABI
+from mute.abis.router import ROUTER_ABI
+from mute.abis.factory import FACTORY_ABI
+from helper import SimpleW3, retry, get_gas, wait, write_file
 
 
 class MuteIO(SimpleW3):

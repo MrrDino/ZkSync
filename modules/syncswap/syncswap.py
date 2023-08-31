@@ -2,18 +2,19 @@ import web3
 import random
 import eth_abi
 
+import settings as conf
+import global_constants as gc
+
 from loguru import logger
 from web3 import AsyncWeb3
 from web3.types import TxParams, ChecksumAddress
 from eth_account.signers.local import LocalAccount
 
-from modules import settings as conf
-from modules import global_constants as gc
-from modules.syncswap import constants as cst
-from modules.syncswap.abis.pool import POOL_ABI
-from modules.syncswap.abis.router import ROUTER_ABI
-from modules.syncswap.abis.factory import FACTORY_ABI
-from modules.helper import SimpleW3, retry, get_gas, wait, write_file
+from syncswap import constants as cst
+from syncswap.abis.pool import POOL_ABI
+from syncswap.abis.router import ROUTER_ABI
+from syncswap.abis.factory import FACTORY_ABI
+from helper import SimpleW3, retry, get_gas, wait, write_file
 
 
 class SyncSwap(SimpleW3):

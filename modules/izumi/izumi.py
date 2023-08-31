@@ -4,16 +4,17 @@ import asyncio
 import aiohttp
 import web3.contract
 
+import settings as conf
+import global_constants as gc
+
 from loguru import logger
 from web3 import AsyncWeb3
 from web3.types import ChecksumAddress
 from eth_account.signers.local import LocalAccount
 
-from modules import settings as conf
-from modules.izumi import constants as cst
-from modules import global_constants as gc
-from modules.izumi.abis.router import ROUTER_ABI
-from modules.helper import SimpleW3, retry, get_gas, wait, write_file
+from izumi import constants as cst
+from izumi.abis.router import ROUTER_ABI
+from helper import SimpleW3, retry, get_gas, wait, write_file
 
 
 class Izumi(SimpleW3):

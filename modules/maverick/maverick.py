@@ -7,11 +7,12 @@ from web3 import AsyncWeb3
 from web3.types import ChecksumAddress
 from eth_account.signers.local import LocalAccount
 
-from modules import settings as conf
-from modules import global_constants as gc
-from modules.maverick import constants as cst
-from modules.maverick.abis.router import ROUTER_ABI
-from modules.helper import SimpleW3, retry, get_gas, wait, write_file
+import settings as conf
+import global_constants as gc
+
+from maverick import constants as cst
+from maverick.abis.router import ROUTER_ABI
+from helper import SimpleW3, retry, get_gas, wait, write_file
 
 
 class Maverick(SimpleW3):

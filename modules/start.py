@@ -130,7 +130,7 @@ async def add_liq(exchange: str, liqer: SimpleW3, key: str):
     await wait(_time=delay)
 
     liq_tokens = gc.LIQ[exchange].copy()
-
+    return
     if exchange == 'SyncSwap':
         token0 = random.choice(liq_tokens)
 
