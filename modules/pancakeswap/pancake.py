@@ -39,7 +39,7 @@ class PancakeSwap(SimpleW3):
 
         if pub_key:
             logger.info(
-                f"Work with \33[{35}m{account.address}\033[0m, action: {action}, exchange: \33[{36}m{exchange}\033[0m"
+                f"Action: {action}, exchange: \33[{36}m{exchange}\033[0m"
             )
 
         if not amount:

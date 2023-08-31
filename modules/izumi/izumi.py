@@ -38,7 +38,7 @@ class Izumi(SimpleW3):
 
         if pub_key:
             logger.info(
-                f"Work with \33[{35}m{account.address}\033[0m, action: {action}, exchange: \33[{36}m{exchange}\033[0m"
+                f"Action: {action}, exchange: \33[{36}m{exchange}\033[0m"
             )
 
         if not amount:
@@ -91,13 +91,7 @@ class Izumi(SimpleW3):
             )
             min_acquired = int(min_acquired * .98)
 
-            print(signer)
-            print(amount)
-            print(min_acquired)
-            # path = to_bytes(text=cst.PATHS[token_out]['in'])
-            # print(path)
             path = token0 + '0007D0' + token1[2:]
-            print(path)
 
             data = [router.encodeABI(
                 fn_name='swapAmount',
@@ -116,10 +110,7 @@ class Izumi(SimpleW3):
                 amount_in=amount
             )
             min_acquired = int(min_acquired * .98)
-
-            # path = to_bytes(text=cst.PATHS[token_in]['out'])
             path = token0 + '000190' + token1[:2]
-            print(1, path)
 
             data = [router.encodeABI(
                 fn_name='swapAmount',
@@ -134,7 +125,7 @@ class Izumi(SimpleW3):
             swap_data = data + [router.encodeABI(fn_name='unwrapWETH9', args=[0, signer])]
 
         status = 0
-        print(swap_data)
+
         tx = await router.functions.multicall(
             swap_data
         ).build_transaction({

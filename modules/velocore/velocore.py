@@ -37,7 +37,7 @@ class Velocore(SimpleW3):
 
         if pub_key:
             logger.info(
-                f"Work with \33[{35}m{account.address}\033[0m, action: {action}, exchange: \33[{36}m{exchange}\033[0m"
+                f"Action: {action}, exchange: \33[{36}m{exchange}\033[0m"
             )
 
         if not amount:
@@ -195,7 +195,7 @@ class Velocore(SimpleW3):
         account = self.get_account(w3=w3, key=key)
 
         logger.info(
-            f"Work with \33[{35}m{account.address}\033[0m, action: add liq, exchange: \33[{36}m{exchange}\033[0m"
+            f"Action: add liquidity, exchange: \33[{36}m{exchange}\033[0m"
         )
 
         token0, token1, signer, router = self.prepare(
@@ -243,13 +243,12 @@ class Velocore(SimpleW3):
             logger.info(f"Insufficient balance of token \33[{36}m{token0}\033[0m")
             return False
 
-        swap_amount = amount / 10 ** 18
         await self.make_swap(
             w3=w3,
             token0=gc.ETH,
             token1=token0,
             account=account,
-            amount=swap_amount,
+            amount=amount,
         )
 
         await self.approve(

@@ -80,9 +80,9 @@ SWAP = {
 # Добавление ликвидности
 LIQ = {
     'Mute': [
-        '0x0e97c7a0f8b2c9885c8ac9fc6136e829cbc21d42',  # MUTE
+        # '0x0e97c7a0f8b2c9885c8ac9fc6136e829cbc21d42',  # MUTE
         '0x3355df6d4c9c3035724fd0e3914de96a5a83aaf4',  # USDC
-        '0xbbeb516fb02a01611cbbe0453fe3c580d7281011',  # WBTC
+        # '0xbbeb516fb02a01611cbbe0453fe3c580d7281011',  # WBTC
     ],
     'Velocore': [
         '0x8e86e46278518efc1c5ced245cba2c7e3ef11557',  # USD+,
@@ -94,7 +94,7 @@ LIQ = {
         # '0xbbeb516fb02a01611cbbe0453fe3c580d7281011',  # WBTC
     ],
     'SpaceFi': [
-        '0x0e97c7a0f8b2c9885c8ac9fc6136e829cbc21d42',  # MUTE
+        # '0x0e97c7a0f8b2c9885c8ac9fc6136e829cbc21d42',  # MUTE
         '0x3355df6d4c9c3035724fd0e3914de96a5a83aaf4',  # USDC
         '0x493257fD37EDB34451f62EDf8D2a0C418852bA4C',  # USDT
     ],

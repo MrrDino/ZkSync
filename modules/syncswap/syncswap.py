@@ -39,7 +39,7 @@ class SyncSwap(SimpleW3):
 
         if pub_key:
             logger.info(
-                f"Work with \33[{35}m{account.address}\033[0m, action: {action}, exchange: \33[{36}m{exchange}\033[0m"
+                f"Action: {action}, exchange: \33[{36}m{exchange}\033[0m"
             )
 
         if not amount:
@@ -212,7 +212,7 @@ class SyncSwap(SimpleW3):
         router = self.get_contract(w3=w3, address=cst.ROUTER, abi=ROUTER_ABI)
 
         logger.info(
-            f"Work with \33[{35}m{account.address}\033[0m, action: add liq, exchange: \33[{36}m{exchange}\033[0m"
+            f"Action: add liquidity, exchange: \33[{36}m{exchange}\033[0m"
         )
 
         pool, token0, token1, pool_address, signer = await self.preparing(

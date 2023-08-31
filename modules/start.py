@@ -17,7 +17,7 @@ from syncswap.syncswap import SyncSwap
 from maverick.maverick import Maverick
 from pancakeswap.pancake import PancakeSwap
 from shitcoins.shit_coins import buy_shitcoin
-from helper import get_txt_info, check_gas, check_proxies, get_keys, get_exchange, wait, wait_sync, SimpleW3
+from helper import get_txt_info, check_gas, get_keys, get_exchange, wait, SimpleW3
 
 
 s = Semaphore(conf.STREAMS)
@@ -46,11 +46,16 @@ async def start(proxies: list, keys: list):
         )
         success, amount, token1 = None, None, None
 
-        for action in actions:
+        await wallet_message(proxies=proxies, key=key)
+
+        for num, action in enumerate(actions):
+
+            first = True if num == 0 else False
 
             if gc.ACTIONS_[action] == "swap":
                 success, amount, token1 = await swap_module(
                     key=key,
+                    first=first,
                     swapper=swapper,
                     exchange=swap_exchange
                 )
@@ -63,19 +68,47 @@ async def start(proxies: list, keys: list):
                     exchange=swap_exchange
                 )
             elif gc.ACTIONS_[action] == "liq":
-                await add_liq(exchange=liq_exchange, liqer=liqer, key=key)
+                await add_liq(
+                    key=key,
+                    liqer=liqer,
+                    first=first,
+                    exchange=liq_exchange,
+                )
             elif gc.ACTIONS_[action] == "nft":
-                await mint(key=key, proxies=proxies)
+                await mint(
+                    key=key,
+                    first=first,
+                    proxies=proxies
+                )
             elif gc.ACTIONS_[action] == "shit":
-                await buy_shit(key=key, proxies=proxies)
+                await buy_shit(
+                    key=key,
+                    first=first,
+                    proxies=proxies
+                )
 
         delay = random.randint(conf.DELAY5[0], conf.DELAY5[1])
         logger.info(f"Change wallet.")
         await wait(_time=delay)
 
 
-async def swap_module(swapper: SimpleW3, exchange: str, key: str) -> [bool, int, str]:
+async def wallet_message(proxies: list, key: str):
+    """Функция сообщения с каким кошельком работаем"""
+
+    s = SimpleW3(proxies=proxies)
+    w3 = await s.connect()
+    account = s.get_account(w3=w3, key=key)
+
+    logger.info(f"Work with \33[{35}m{account.address}\033[0m")
+
+
+async def swap_module(swapper: SimpleW3, exchange: str, key: str, first: bool = False) -> [bool, int, str]:
     """Функция произведения свапа токена ETH -> stable"""
+
+    if not first:
+        delay = random.randint(conf.DELAY1[0], conf.DELAY1[1])
+        logger.info(f"Swap back")
+        await wait(_time=delay)
 
     amount = False
     token0 = gc.ETH
@@ -122,12 +155,13 @@ async def swap_back(amount: int, swapper: SimpleW3, exchange: str, token1: str, 
     )
 
 
-async def add_liq(exchange: str, liqer: SimpleW3, key: str):
+async def add_liq(exchange: str, liqer: SimpleW3, key: str, first: bool = False):
     """Функция добавления ликвидности"""
 
-    delay = random.randint(conf.DELAY2[0], conf.DELAY2[1])
-    logger.info(f"Go to deposit liquidity")
-    await wait(_time=delay)
+    if not first:
+        delay = random.randint(conf.DELAY2[0], conf.DELAY2[1])
+        logger.info(f"Go to deposit liquidity")
+        await wait(_time=delay)
 
     liq_tokens = gc.LIQ[exchange].copy()
 
@@ -147,24 +181,27 @@ async def add_liq(exchange: str, liqer: SimpleW3, key: str):
                 liq_tokens.remove(token0)
 
 
-async def mint(key: str, proxies: list):
+async def mint(key: str, proxies: list, first: bool = False):
     """Функция минта NFT"""
 
-    delay = random.randint(conf.DELAY4[0], conf.DELAY4[1])
-    logger.info(f"Go to mint NFT")
-    await wait(_time=delay)
+    if not first:
+        delay = random.randint(conf.DELAY4[0], conf.DELAY4[1])
+        logger.info(f"Go to mint NFT")
+        await wait(_time=delay)
 
     minter = Minter(proxies=proxies)
     await minter.start_mint(key=key)
 
 
-async def buy_shit(key: str, proxies: list):
+async def buy_shit(key: str, proxies: list, first: bool = False):
     """Функция покупки шиткоина"""
 
-    delay = random.randint(conf.DELAY3[0], conf.DELAY3[1])
+    if not first:
+        delay = random.randint(conf.DELAY3[0], conf.DELAY3[1])
+        logger.info(f"Go to buy shit coin")
+        await wait(_time=delay)
+
     shit_coin = random.choice(gc.SHIT_COINS)
-    logger.info(f"Go to buy shit coin")
-    await wait(_time=delay)
 
     await buy_shitcoin(shit_coin=shit_coin, key=key, proxies=proxies)
 
@@ -188,11 +225,19 @@ def shuffle_actions() -> list:
 
     random.shuffle(act_list)
 
+    if 1 in act_list and 0 not in act_list:
+        logger.error("Swap back is enabled, but swap disabled")
+        raise Exception
+
+    if 0 in act_list:
+        while act_list.index(0) > act_list.index(1):
+            random.shuffle(act_list)
+
     return act_list
 
 
 def get_exchange_by_act(action: str, proxies: list) -> [SimpleW3, str]:
-    """Функция получния биржа по действию"""
+    """Функция получения биржы по действию"""
 
     exchange = get_exchange(action=action)
 
@@ -238,4 +283,4 @@ def starter():
 
 
 if __name__ == '__main__':
-    starter()
+    shuffle_actions()
