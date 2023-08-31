@@ -1,19 +1,19 @@
 import web3
+import random
 import eth_abi
-
-import settings as conf
-import global_constants as gc
 
 from loguru import logger
 from web3 import AsyncWeb3
 from web3.types import TxParams, ChecksumAddress
 from eth_account.signers.local import LocalAccount
 
-from . import constants as cst
-from .abis.pool import POOL_ABI
-from .abis.router import ROUTER_ABI
-from .abis.factory import FACTORY_ABI
-from helper import SimpleW3, retry, get_gas, wait, write_file
+from modules import settings as conf
+from modules import global_constants as gc
+from modules.syncswap import constants as cst
+from modules.syncswap.abis.pool import POOL_ABI
+from modules.syncswap.abis.router import ROUTER_ABI
+from modules.syncswap.abis.factory import FACTORY_ABI
+from modules.helper import SimpleW3, retry, get_gas, wait, write_file
 
 
 class SyncSwap(SimpleW3):
@@ -25,6 +25,7 @@ class SyncSwap(SimpleW3):
             token0: str,
             token1: str,
             mode: int = 0,
+            action: str = None,
             amount: float = None,
             exchange: str = None,
             pub_key: bool = False,
@@ -36,7 +37,9 @@ class SyncSwap(SimpleW3):
         account = self.get_account(w3=w3, key=key)
 
         if pub_key:
-            logger.info(f"Work with \33[{35}m{account.address}\033[0m Exchange: \33[{36}m{exchange}\033[0m")
+            logger.info(
+                f"Work with \33[{35}m{account.address}\033[0m, action: {action}, exchange: \33[{36}m{exchange}\033[0m"
+            )
 
         if not amount:
             need_msg = True
@@ -150,14 +153,25 @@ class SyncSwap(SimpleW3):
         swap_tx['maxPriorityFeePerGas'] = gas_price
         swap_tx['gas'] = await w3.eth.estimate_gas(swap_tx)
 
+        delay = random.randint(gc.BUILD_DELAY[0], gc.BUILD_DELAY[1])
+        logger.info("Transaction built")
+        await wait(_time=delay)
+
         signed_tx = account.sign_transaction(transaction_dict=swap_tx)
-        logger.info("Swap transaction signed.")
-        await wait(_time=20)
+
+        delay = random.randint(gc.SIGN_DELAY[0], gc.SIGN_DELAY[1])
+        logger.info("Transaction signed")
+        await wait(_time=delay)
 
         status = 0
 
         try:
             swap_tx = await w3.eth.send_raw_transaction(transaction=signed_tx.rawTransaction)
+
+            delay = random.randint(gc.SIGN_DELAY[0], gc.SIGN_DELAY[1])
+            logger.info("Transaction sent")
+            await wait(_time=delay)
+
             tx_rec = await w3.eth.wait_for_transaction_receipt(swap_tx)
 
             gas = get_gas()
@@ -185,8 +199,9 @@ class SyncSwap(SimpleW3):
             self,
             key: str,
             token1: str,
+            exchange: str,
             mode: int = 1
-    ):
+    ) -> bool:
         """Функция добавления ликвидности для SyncSwap"""
 
         amount = None
@@ -194,6 +209,10 @@ class SyncSwap(SimpleW3):
         token0 = self.to_address(gc.ETH)
         account = self.get_account(w3=w3, key=key)
         router = self.get_contract(w3=w3, address=cst.ROUTER, abi=ROUTER_ABI)
+
+        logger.info(
+            f"Work with \33[{35}m{account.address}\033[0m, action: add liq, exchange: \33[{36}m{exchange}\033[0m"
+        )
 
         pool, token0, token1, pool_address, signer = await self.preparing(
             w3=w3,
@@ -251,14 +270,25 @@ class SyncSwap(SimpleW3):
         liq_tx['maxPriorityFeePerGas'] = gas_price
         liq_tx['gas'] = await w3.eth.estimate_gas(liq_tx)
 
-        signed_tx = account.sign_transaction(transaction_dict=liq_tx)
-        logger.info("Liquidity transaction signed.")
-        await wait(_time=20)
+        delay = random.randint(gc.BUILD_DELAY[0], gc.BUILD_DELAY[1])
+        logger.info("Transaction built")
+        await wait(_time=delay)
+
+        signed_tx = account.sign_transaction(liq_tx)
+
+        delay = random.randint(gc.SIGN_DELAY[0], gc.SIGN_DELAY[1])
+        logger.info("Transaction signed")
+        await wait(_time=delay)
 
         status = 0
 
         try:
             liq_tx = await w3.eth.send_raw_transaction(transaction=signed_tx.rawTransaction)
+
+            delay = random.randint(gc.SIGN_DELAY[0], gc.SIGN_DELAY[1])
+            logger.info("Transaction sent")
+            await wait(_time=delay)
+
             tx_rec = await w3.eth.wait_for_transaction_receipt(liq_tx)
 
             gas = get_gas()
@@ -280,6 +310,7 @@ class SyncSwap(SimpleW3):
             logger.error(f"\33[{31}m{err}\033[0m")
 
         assert status == 1  # если статус != 1 транзакция не прошла
+        return True
 
     async def preparing(self, w3: AsyncWeb3, token0: str, token1: str, account: LocalAccount) -> [
         web3.contract.Contract,

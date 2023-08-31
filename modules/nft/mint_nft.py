@@ -1,7 +1,5 @@
 import random
 
-import settings as conf
-
 from loguru import logger
 from eth_abi import encode
 from web3 import AsyncWeb3, Web3
@@ -9,8 +7,9 @@ from web3.types import ChecksumAddress
 from web3.exceptions import ContractLogicError
 from eth_account.signers.local import LocalAccount
 
-from . import constants as cst
-from helper import SimpleW3, retry, get_gas, wait, write_file
+from modules import settings as conf
+from modules.nft import constants as cst
+from modules.helper import SimpleW3, retry, get_gas, wait, write_file
 
 
 class Minter(SimpleW3):

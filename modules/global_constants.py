@@ -4,15 +4,35 @@ ZK_NODE = 'https://rpc.ankr.com/zksync_era'  # адрес ноды в сети Z
 
 USDC = '0x3355df6d4c9c3035724fd0e3914de96a5a83aaf4'  # адрес USDC в сети ZkSync
 ETH = '0x5aea5775959fbc2557cc8789bc1bf90a239d9a91'  # адрес ETH в сети ZkSync
+USDT = "0x493257fD37EDB34451f62EDf8D2a0C418852bA4C"
 
 USDC_DECS = 6  # кол-во десятков при переводе в USDC
 ETH_DECS = 18  # кол-во десятков при переводе в ETH
 
 
+# Спсиок действий, которые присутствуют в скрипте
+ACTIONS_ = {
+    0: "swap",
+    1: "swap_back",
+    2: "liq",
+    3: "nft",
+    4: "shit"
+}
+
+
 # Обмен токенов
 
 # Список бирж, с которыми работает код
-EXCHANGES = ['Mute', 'Velocore', 'SyncSwap', 'SpaceFi', 'Pancake']
+EXCHANGES = [
+    'Mute',
+    'Izumi',
+    'SpaceFi',
+    'Pancake',
+    'Maverick',
+    'Velocore',
+    'SyncSwap',
+]
+
 
 SWAP = {
     'Mute': [
@@ -40,12 +60,19 @@ SWAP = {
         '0xfC7E56298657B002b3e656400E746b7212912757',  # ZkUSD,
         '0x503234F203fC7Eb888EEC8513210612a43Cf6115',  # LUSD,
         '0x8e86e46278518efc1c5ced245cba2c7e3ef11557',  # USD+,
-        '0xb4c1544cb4163f4c2eca1ae9ce999f63892d912a',  # FRAX,
+        # '0xb4c1544cb4163f4c2eca1ae9ce999f63892d912a',  # FRAX,
     ],
     'Pancake': [
         '0x3355df6D4c9C3035724Fd0e3914dE96A5a83aaf4',  # USDC
         '0x493257fD37EDB34451f62EDf8D2a0C418852bA4C',  # USDT
         '0x2039bb4116B4EFc145Ec4f0e2eA75012D6C0f181',  # BUSD,
+    ],
+    'Maverick': [
+        '0x3355df6D4c9C3035724Fd0e3914dE96A5a83aaf4',  # USDC
+    ],
+    'Izumi': [
+        '0x3355df6D4c9C3035724Fd0e3914dE96A5a83aaf4',  # USDC
+        # '0x496d88d1efc3e145b7c12d53b78ce5e7eda7a42c',  # USDT
     ]
 }
 
@@ -59,12 +86,12 @@ LIQ = {
     ],
     'Velocore': [
         '0x8e86e46278518efc1c5ced245cba2c7e3ef11557',  # USD+,
-        '0x3355df6d4c9c3035724fd0e3914de96a5a83aaf4',  # USDC
+        # '0x3355df6d4c9c3035724fd0e3914de96a5a83aaf4',  # USDC
     ],
     'SyncSwap': [
         '0x3355df6D4c9C3035724Fd0e3914dE96A5a83aaf4',  # USDC
         '0x493257fD37EDB34451f62EDf8D2a0C418852bA4C',  # USDT
-        '0xbbeb516fb02a01611cbbe0453fe3c580d7281011',  # WBTC
+        # '0xbbeb516fb02a01611cbbe0453fe3c580d7281011',  # WBTC
     ],
     'SpaceFi': [
         '0x0e97c7a0f8b2c9885c8ac9fc6136e829cbc21d42',  # MUTE
@@ -101,3 +128,9 @@ ACTIONS = {
 
 # Названия столбцов файла с результатами
 CSV_COLUMNS = ['Wallet', 'Time', "Tx", "Action", "Status"]
+
+
+# Ожидания при работе с транзакциями
+BUILD_DELAY = [17, 28]
+SIGN_DELAY = [23, 39]
+SEND_DELAY = [21, 43]

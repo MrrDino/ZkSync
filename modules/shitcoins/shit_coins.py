@@ -1,5 +1,5 @@
-from . import constants as cst
-from syncswap.syncswap import SyncSwap
+from modules.shitcoins import constants as cst
+from modules.syncswap.syncswap import SyncSwap
 
 
 async def buy_shitcoin(shit_coin: str, key: str, proxies: list):

@@ -357,10 +357,10 @@ def get_keys(items: list, n: int) -> list:
         yield e_c
 
 
-def get_exchange() -> str:
+def get_exchange(action: str) -> str:
     """Функция получения биржи"""
 
-    choices = list([exchange for exchange in cst.EXCHANGES if conf.EXCHANGES_STATUS[exchange]])
+    choices = list([exchange for exchange in cst.EXCHANGES if conf.EXCHANGES_STATUS[action][exchange]])
     return random.choice(choices)
 
 
