@@ -130,7 +130,7 @@ async def add_liq(exchange: str, liqer: SimpleW3, key: str):
     await wait(_time=delay)
 
     liq_tokens = gc.LIQ[exchange].copy()
-    return
+
     if exchange == 'SyncSwap':
         token0 = random.choice(liq_tokens)
 
@@ -229,11 +229,11 @@ def starter():
     while not check_proxy:
         keys = get_txt_info('keys.txt')
         proxies = get_txt_info('proxies.txt')
-        check_proxy = check_proxies(proxies=proxies, keys=keys)
-
-        if not check_proxy:
-            logger.info(f'Insufficient number of proxies.')
-            wait_sync(_time=conf.TIMEOUT)
+        # check_proxy = check_proxies(proxies=proxies, keys=keys)
+        #
+        # if not check_proxy:
+        #     logger.info(f'Insufficient number of proxies.')
+        #     wait_sync(_time=conf.TIMEOUT)
 
     keys_list = list(get_keys(items=keys, n=conf.STREAMS))
     threads = [Thread(target=start_thread, args=(ks, proxies)) for ks in keys_list]
