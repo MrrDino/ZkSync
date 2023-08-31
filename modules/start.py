@@ -283,4 +283,4 @@ def starter():
 
 
 if __name__ == '__main__':
-    shuffle_actions()
+    starter()

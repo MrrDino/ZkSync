@@ -229,20 +229,6 @@ class Velocore(SimpleW3):
                         need_msg = False
                     await wait(_time=conf.TOP_UP_WAIT)
 
-        balance_check = await self.check_amount(
-            w3=w3,
-            eth=amount,
-            token=token0,
-            wallet=signer,
-            p_abi=PAIR_ABI,
-            f_abi=FACTORY_ABI,
-            f_address=cst.FACTORY
-        )
-
-        if not balance_check:
-            logger.info(f"Insufficient balance of token \33[{36}m{token0}\033[0m")
-            return False
-
         await self.make_swap(
             w3=w3,
             token0=gc.ETH,
