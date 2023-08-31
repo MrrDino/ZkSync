@@ -224,16 +224,8 @@ def start_thread(keys: list, proxies: list):
 
 def starter():
 
-    check_proxy = False
-
-    while not check_proxy:
-        keys = get_txt_info('keys.txt')
-        proxies = get_txt_info('proxies.txt')
-        # check_proxy = check_proxies(proxies=proxies, keys=keys)
-        #
-        # if not check_proxy:
-        #     logger.info(f'Insufficient number of proxies.')
-        #     wait_sync(_time=conf.TIMEOUT)
+    keys = get_txt_info('keys.txt')
+    proxies = get_txt_info('proxies.txt')
 
     keys_list = list(get_keys(items=keys, n=conf.STREAMS))
     threads = [Thread(target=start_thread, args=(ks, proxies)) for ks in keys_list]
